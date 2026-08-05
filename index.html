@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b0d0c">
+  <meta name="description" content="Baked Africa live product menu and ordering portal.">
+  <title>Baked Africa | Live Menu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="ageGate" class="age-gate">
+    <div class="age-card">
+      <div class="brand-mark">B</div>
+      <p class="eyebrow">BAKED AFRICA</p>
+      <h1>Adults only</h1>
+      <p>This live menu is intended for verified adult customers. Please confirm that you are 18 or older.</p>
+      <button id="confirmAge" class="btn primary wide">I am 18 or older</button>
+      <button id="leaveSite" class="btn ghost wide">Leave</button>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <button id="homeButton" class="brand-button" aria-label="Return to menu">
+      <span class="brand-mark small">B</span>
+      <span><small>BAKED AFRICA</small><strong>Live Menu</strong></span>
+    </button>
+    <div class="top-actions">
+      <span class="live-pill"><i></i> Live stock</span>
+      <button id="adminButton" class="btn ghost compact">Admin</button>
+      <button id="cartButton" class="cart-button" aria-label="Open cart">Cart <span id="cartCount">0</span></button>
+    </div>
+  </header>
+
+  <main>
+    <section id="storeView">
+      <section class="hero">
+        <div>
+          <p class="eyebrow accent">AVAILABLE TODAY</p>
+          <h1>Easy ordering.<br>Live availability.</h1>
+          <p>Browse the current Baked Africa range, add products to your cart and submit your order in a few simple steps.</p>
+        </div>
+        <div class="hero-panel">
+          <div><strong id="productCount">0</strong><span>Products</span></div>
+          <div><strong id="inStockCount">0</strong><span>In stock</span></div>
+          <div><strong id="categoryCount">0</strong><span>Categories</span></div>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="Search products"></label>
+        <select id="categoryFilter"><option value="all">All categories</option></select>
+        <select id="stockFilter"><option value="all">All availability</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
+      </section>
+
+      <div id="categoryChips" class="chips"></div>
+      <div id="status" class="status">Loading live stock…</div>
+      <section id="productGrid" class="product-grid"></section>
+    </section>
+
+    <section id="adminView" class="admin-view hidden">
+      <div id="adminLogin" class="admin-login">
+        <div class="panel narrow">
+          <p class="eyebrow accent">STAFF ACCESS</p>
+          <h2>Admin login</h2>
+          <p>Sign in to manage products, stock and orders.</p>
+          <form id="loginForm" class="form-stack">
+            <label>Email<input id="loginEmail" type="email" required autocomplete="email"></label>
+            <label>Password<input id="loginPassword" type="password" required autocomplete="current-password"></label>
+            <button class="btn primary wide" type="submit">Sign in</button>
+          </form>
+          <button id="claimAdminButton" class="text-button hidden">Claim first admin access</button>
+          <p id="loginMessage" class="form-message"></p>
+        </div>
+      </div>
+
+      <div id="adminDashboard" class="hidden">
+        <div class="admin-heading">
+          <div><p class="eyebrow accent">BAKED CONTROL CENTRE</p><h2>Admin Dashboard</h2></div>
+          <button id="logoutButton" class="btn ghost">Sign out</button>
+        </div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" data-tab="products">Products</button>
+          <button class="admin-tab" data-tab="orders">Orders</button>
+          <button class="admin-tab" data-tab="inventory">Inventory</button>
+        </div>
+
+        <section id="productsTab" class="admin-tab-panel">
+          <div class="admin-toolbar"><h3>Products</h3><button id="addProductButton" class="btn primary">+ Add product</button></div>
+          <div id="adminProducts" class="admin-list"></div>
+        </section>
+
+        <section id="ordersTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar"><h3>Customer Orders</h3><button id="refreshOrdersButton" class="btn ghost">Refresh</button></div>
+          <div id="adminOrders" class="admin-list"></div>
+        </section>
+
+        <section id="inventoryTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar"><h3>Stock History</h3><button id="refreshInventoryButton" class="btn ghost">Refresh</button></div>
+          <div id="stockHistory" class="admin-list"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <aside id="cartDrawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head"><div><p class="eyebrow accent">YOUR ORDER</p><h2>Shopping Cart</h2></div><button class="icon-button" data-close="cartDrawer">×</button></div>
+    <div id="cartItems" class="cart-items"></div>
+    <div id="cartEmpty" class="empty-state"><h3>Your cart is empty</h3><p>Add products from the live menu to begin.</p></div>
+    <div id="checkoutArea" class="checkout hidden">
+      <div class="cart-total"><span>Total</span><strong id="cartTotal">R0</strong></div>
+      <form id="checkoutForm" class="form-stack">
+        <label>Customer name<input id="customerName" required maxlength="80"></label>
+        <label>Cellphone number<input id="customerPhone" required maxlength="30" inputmode="tel"></label>
+        <label>Order notes<textarea id="customerNote" rows="3" maxlength="300" placeholder="Optional"></textarea></label>
+        <button id="placeOrderButton" class="btn primary wide" type="submit">Place order</button>
+      </form>
+      <p id="checkoutMessage" class="form-message"></p>
+    </div>
+  </aside>
+  <div id="drawerBackdrop" class="backdrop hidden"></div>
+
+  <div id="productModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h2 id="productModalTitle">Add product</h2><button class="icon-button" data-close="productModal">×</button></div>
+      <form id="productForm" class="form-grid">
+        <input id="productId" type="hidden">
+        <label>Product name<input id="productName" required></label>
+        <label>SKU<input id="productSku" required></label>
+        <label>Category<input id="productCategory" required placeholder="Pre-Rolls, Edibles, Vapes"></label>
+        <label>Range / Group<input id="productGroup" required placeholder="Green, Silver, Platinum"></label>
+        <label>Strength<input id="productStrength" placeholder="1g, 25mg, 1ml"></label>
+        <label>Price (R)<input id="productPrice" type="number" min="0" step="0.01" required></label>
+        <label>Current stock<input id="productStock" type="number" min="0" required></label>
+        <label>Low-stock level<input id="productReorder" type="number" min="0" value="5" required></label>
+        <label class="full">Image URL<input id="productImage" type="url" placeholder="https://..."></label>
+        <label class="full">Description<textarea id="productDescription" rows="3"></textarea></label>
+        <label class="check full"><input id="productActive" type="checkbox" checked> Visible on live menu</label>
+        <div class="modal-actions full"><button type="button" class="btn ghost" data-close="productModal">Cancel</button><button type="submit" class="btn primary">Save product</button></div>
+      </form>
+      <p id="productFormMessage" class="form-message"></p>
+    </div>
+  </div>
+
+  <div id="stockModal" class="modal hidden">
+    <div class="modal-card small-card">
+      <div class="modal-head"><h2>Adjust stock</h2><button class="icon-button" data-close="stockModal">×</button></div>
+      <form id="stockForm" class="form-stack">
+        <input id="stockProductId" type="hidden">
+        <p id="stockProductName" class="stock-product-name"></p>
+        <label>Quantity change<input id="stockQuantity" type="number" required placeholder="Use -5 for stock out"></label>
+        <label>Reason<input id="stockReference" required placeholder="Manufacturing, damaged, sample..."></label>
+        <button class="btn primary wide" type="submit">Update stock</button>
+      </form>
+      <p id="stockFormMessage" class="form-message"></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span></footer>
+  <script src="app.js"></script>
+</body>
+</html>
