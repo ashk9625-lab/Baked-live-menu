@@ -57,24 +57,27 @@ function renderProducts(){
   $('#status').textContent=`Showing ${shown.length} of ${products.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
-    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${p.stock<=0?'disabled':''}>${p.stock>0?'Add to cart':'Unavailable'}</button></div></div></article>`;
+    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${p.stock<=0?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${p.stock<=0?'disabled':''}>${p.stock>0?'Add to cart':'Unavailable'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
-  $$('.add-button').forEach(b=>b.onclick=()=>addToCart(b.dataset.id));
+  $$('.add-button').forEach(b=>b.onclick=()=>{ const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1)); });
 }
 async function loadProducts(){
   try{
     const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc');
-    products=data.length?data:FALLBACK_PRODUCTS;
-    $('#status').textContent=data.length?'Connected to live inventory':'Live inventory is empty — showing starter catalogue';
-  }catch(e){ products=FALLBACK_PRODUCTS; $('#status').textContent='Showing starter catalogue — live inventory connection pending'; }
+    products=data;
+    $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
+  }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
   updateStats(); buildFilters(); renderProducts(); updateCart();
 }
-function addToCart(id){
-  const p=products.find(x=>x.id===id); if(!p||p.stock<=0)return;
-  const item=cart.find(x=>x.id===id); const qty=item?item.quantity:0;
-  if(qty>=p.stock)return toast('No more stock is available');
-  item?item.quantity++:cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:1,stock:p.stock});
-  persistCart(); toast(`${p.name} added to cart`);
+function addToCart(id,requestedQuantity=1){
+  const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
+  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
+  const item=cart.find(x=>String(x.id)===String(id));
+  const existing=item?item.quantity:0;
+  if(existing+amount>p.stock)return toast(`Only ${p.stock-existing} more available`);
+  if(item)item.quantity+=amount;
+  else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
+  persistCart(); toast(`${amount} × ${p.name} added to cart`);
 }
 function changeQty(id,change){
   const item=cart.find(x=>x.id===id); if(!item)return;
@@ -115,6 +118,20 @@ function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, o
   ].filter(Boolean).join('\n');
 }
 
+let lastOrderForInvoice=null;
+
+function printInvoice(order=lastOrderForInvoice){
+  if(!order) return toast('No invoice is available yet');
+  const rows=order.items.map(item=>`<tr><td>${escapeHtml(item.name)}</td><td>${item.quantity}</td><td>${money(item.price)}</td><td>${money(item.price*item.quantity)}</td></tr>`).join('');
+  const total=order.items.reduce((sum,item)=>sum+item.price*item.quantity,0);
+  const invoiceWindow=window.open('','_blank','width=900,height=750');
+  if(!invoiceWindow) return toast('Allow pop-ups to print the invoice');
+  invoiceWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${escapeHtml(order.orderNo)}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;max-width:850px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #111;padding-bottom:20px;margin-bottom:25px}.brand{font-size:28px;font-weight:800}.muted{color:#666}table{width:100%;border-collapse:collapse;margin-top:25px}th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}th{background:#f3f3f3}.total{font-size:20px;font-weight:800;text-align:right;margin-top:25px}.note{margin-top:25px;padding:15px;background:#f7f7f7}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="brand">BAKED AFRICA</div><div class="muted">Live Menu Order Invoice</div></div><div><strong>Invoice ${escapeHtml(order.orderNo)}</strong><br><span class="muted">${new Date(order.createdAt).toLocaleString('en-ZA')}</span></div></div><p><strong>Customer:</strong> ${escapeHtml(order.customerName)}<br><strong>Cellphone:</strong> ${escapeHtml(order.customerPhone)}</p><table><thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${money(total)}</div>${order.note?`<div class="note"><strong>Order note:</strong><br>${escapeHtml(order.note)}</div>`:''}<p class="muted" style="margin-top:35px">Thank you for your order. This invoice confirms the order request and is subject to final stock confirmation.</p><button onclick="window.print()">Print invoice</button></body></html>`);
+  invoiceWindow.document.close();
+  invoiceWindow.focus();
+  setTimeout(()=>invoiceWindow.print(),300);
+}
+
 async function placeOrder(e){
   e.preventDefault();
 
@@ -146,10 +163,12 @@ async function placeOrder(e){
     const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
     const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
 
+    lastOrderForInvoice={orderNo,customerName,customerPhone,note,items:orderedItems,createdAt:new Date().toISOString()};
     cart=[];
     persistCart();
     e.target.reset();
-    $('#checkoutMessage').textContent=`Order ${orderNo} submitted successfully. Opening WhatsApp…`;
+    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. <button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
+    $('#printInvoiceButton').onclick=()=>printInvoice();
     toast(`Order ${orderNo} received`);
 
     if(whatsappWindow){
@@ -188,7 +207,7 @@ async function claimAdmin(){
 }
 function logout(){ accessToken=''; localStorage.removeItem('baked-access-token'); $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent=''; }
 async function loadAdminProducts(){
-  try{ const data=await api('/rest/v1/products?select=*&order=active.desc,group_name.asc,name.asc',{auth:true}); renderAdminProducts(data); }catch(err){ $('#adminProducts').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; }
+  try{ const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc',{auth:true}); renderAdminProducts(data); }catch(err){ $('#adminProducts').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; }
 }
 function renderAdminProducts(data){
   $('#adminProducts').innerHTML=data.length?data.map(p=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${initials(p.name)}</span><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)} · ${escapeHtml(p.group_name||p.category)} · ${money(p.price)}</small></div></div><div class="admin-row-data"><span class="stock-number ${p.stock<=p.reorder_level?'warning':''}">${p.stock} units</span><span class="visibility ${p.active?'active':'inactive'}">${p.active?'Visible':'Hidden'}</span><button class="btn ghost compact edit-product" data-id="${p.id}">Edit</button><button class="btn ghost compact stock-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Stock</button><button class="btn danger compact delete-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No products yet</h3><p>Add your first live menu product.</p></div>';
@@ -197,9 +216,7 @@ function renderAdminProducts(data){
   $$('.delete-product').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.id,b.dataset.name,b));
 }
 async function deleteProduct(id,name,button){
-  if(!confirm(`Delete "${name}"?
-
-It will be removed from the live menu.`)) return;
+  if(!confirm(`Permanently delete "${name}"?\n\nThis removes it from the database and cannot be undone.`)) return;
   const originalText=button.textContent;
   button.disabled=true;
   button.textContent='Deleting…';
@@ -211,29 +228,15 @@ It will be removed from the live menu.`)) return;
     });
     cart=cart.filter(item=>String(item.id)!==String(id));
     persistCart();
-    toast(`${name} deleted`);
+    toast(`${name} permanently deleted`);
     await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
   }catch(err){
-    // Products used in previous orders may be protected by database history.
-    // In that case, hide the product instead so it disappears from the live menu.
-    try{
-      await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}`,{
-        method:'PATCH',
-        auth:true,
-        headers:{Prefer:'return=minimal'},
-        body:JSON.stringify({active:false,updated_at:new Date().toISOString()})
-      });
-      cart=cart.filter(item=>String(item.id)!==String(id));
-      persistCart();
-      toast(`${name} removed from the live menu`);
-      await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
-    }catch(fallbackErr){
-      toast(`Could not delete product: ${fallbackErr.message}`);
-      button.disabled=false;
-      button.textContent=originalText;
-    }
+    toast(`Permanent delete failed: ${err.message}`);
+    button.disabled=false;
+    button.textContent=originalText;
   }
 }
+
 function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productId').value=p?.id||'';
   if(p){ $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=p.description||'';$('#productActive').checked=p.active; }
