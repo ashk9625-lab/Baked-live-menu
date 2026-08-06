@@ -197,10 +197,20 @@ async function login(e){
     accessToken=data.access_token; localStorage.setItem('baked-access-token',accessToken); await verifyAdmin(true);
   }catch(err){ $('#loginMessage').textContent=err.message; }
 }
+async function signupStaff(e){
+  e.preventDefault();
+  const email=$('#signupEmail').value.trim(), password=$('#signupPassword').value;
+  $('#loginMessage').textContent='Creating account…';
+  try{
+    await api('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password})});
+    $('#loginMessage').textContent='Account created. Confirm the email if requested, then ask an existing admin to approve this email.';
+    $('#signupForm').reset();
+  }catch(err){$('#loginMessage').textContent=err.message;}
+}
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true)]); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -258,11 +268,44 @@ async function adjustStock(e){
 async function loadOrders(){
   try{
     const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
-    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
+    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
+    $$('.delete-order').forEach(b=>b.onclick=()=>deleteOrder(b.dataset.id,b.dataset.number));
   }catch(err){$('#adminOrders').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function setOrderStatus(id,status){ try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:status})});toast('Order status updated');await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);}catch(err){toast(err.message);await loadOrders();} }
+async function deleteOrder(id,number){
+  if(!confirm(`Permanently delete order ${number}?\n\nThis cannot be undone and will not change current stock.`))return;
+  try{await api('/rest/v1/rpc/delete_order_admin',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id})});toast(`Order ${number} deleted`);await loadOrders();}catch(err){toast(err.message);}
+}
+async function deleteOldCompletedOrders(){
+  const days=Number($('#oldOrderDays').value||30);
+  if(!confirm(`Delete every Completed or Cancelled order older than ${days} days?\n\nThis cannot be undone.`))return;
+  try{
+    const before=new Date(Date.now()-days*86400000).toISOString();
+    const rows=await api(`/rest/v1/orders?select=id,order_number&created_at=lt.${encodeURIComponent(before)}&status=in.(Completed,Cancelled)`,{auth:true});
+    if(!rows.length)return toast('No matching old orders found');
+    for(const row of rows)await api('/rest/v1/rpc/delete_order_admin',{method:'POST',auth:true,body:JSON.stringify({p_order_id:row.id})});
+    toast(`${rows.length} old order${rows.length===1?'':'s'} deleted`);await loadOrders();
+  }catch(err){toast(err.message);}
+}
+async function loadAdminUsers(){
+  if(!$('#adminUsersList'))return;
+  try{
+    const rows=await api('/rest/v1/rpc/list_admin_users',{method:'POST',auth:true,body:'{}'});
+    $('#adminUsersList').innerHTML=rows.length?rows.map(u=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">A</span><div><strong class="admin-email">${escapeHtml(u.email)}</strong><small>Admin since ${new Date(u.created_at).toLocaleDateString('en-ZA')}</small></div></div><button class="btn danger compact remove-admin" data-id="${u.user_id}" data-email="${escapeHtml(u.email)}">Remove</button></article>`).join(''):'<div class="empty-state"><p>No administrators found.</p></div>';
+    $$('.remove-admin').forEach(b=>b.onclick=()=>removeAdmin(b.dataset.id,b.dataset.email));
+  }catch(err){$('#adminUsersList').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
+}
+async function addAdmin(e){
+  e.preventDefault();const email=$('#newAdminEmail').value.trim();$('#adminUsersMessage').textContent='Adding…';
+  try{await api('/rest/v1/rpc/add_admin_by_email',{method:'POST',auth:true,body:JSON.stringify({p_email:email})});$('#newAdminEmail').value='';$('#adminUsersMessage').textContent='Admin access added.';toast(`${email} is now an admin`);await loadAdminUsers();}catch(err){$('#adminUsersMessage').textContent=err.message;}
+}
+async function removeAdmin(id,email){
+  if(!confirm(`Remove admin access for ${email}?`))return;
+  try{await api('/rest/v1/rpc/remove_admin_user',{method:'POST',auth:true,body:JSON.stringify({p_user_id:id})});toast('Admin access removed');await loadAdminUsers();}catch(err){toast(err.message);}
+}
+
 async function loadInventory(){
   try{ const rows=await api('/rest/v1/stock_movements?select=*,products(name)&order=created_at.desc&limit=100',{auth:true}); $('#stockHistory').innerHTML=rows.length?rows.map(r=>`<article class="admin-row"><div class="admin-row-main"><span class="movement ${r.quantity>=0?'positive':'negative'}">${r.quantity>=0?'+':''}${r.quantity}</span><div><strong>${escapeHtml(r.products?.name||'Product')}</strong><small>${escapeHtml(r.movement_type)} · ${escapeHtml(r.reference||'No reference')}</small></div></div><time>${new Date(r.created_at).toLocaleString('en-ZA')}</time></article>`).join(''):'<div class="empty-state"><h3>No stock history yet</h3></div>'; }catch(err){$('#stockHistory').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
@@ -365,8 +408,8 @@ $('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.valu
 $('#leaveSite').onclick=()=>location.href='https://www.google.com';
 if(sessionStorage.getItem('baked-age-verified')==='yes') $('#ageGate').classList.add('hidden');
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
-$('#checkoutForm').onsubmit=placeOrder; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
-$('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#refreshInventoryButton').onclick=loadInventory;
+$('#checkoutForm').onsubmit=placeOrder; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
+$('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOverlays()});

@@ -84,6 +84,14 @@
             <label>Password<input id="loginPassword" type="password" required autocomplete="current-password"></label>
             <button class="btn primary wide" type="submit">Sign in</button>
           </form>
+          <details class="staff-signup"><summary>Create a staff account</summary>
+            <form id="signupForm" class="form-stack">
+              <label>Email<input id="signupEmail" type="email" required autocomplete="email"></label>
+              <label>Password<input id="signupPassword" type="password" minlength="8" required autocomplete="new-password"></label>
+              <button class="btn ghost wide" type="submit">Create account</button>
+            </form>
+            <p class="form-message">After creating the account, an existing administrator must approve the email under Admin Users.</p>
+          </details>
           <button id="claimAdminButton" class="text-button hidden">Claim first admin access</button>
           <p id="loginMessage" class="form-message"></p>
         </div>
@@ -99,6 +107,7 @@
           <button class="admin-tab" data-tab="orders">Orders</button>
           <button class="admin-tab" data-tab="inventory">Inventory</button>
           <button class="admin-tab" data-tab="settings">Settings</button>
+          <button class="admin-tab" data-tab="users">Admin Users</button>
         </div>
 
         <section id="productsTab" class="admin-tab-panel">
@@ -108,12 +117,26 @@
 
         <section id="ordersTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Customer Orders</h3><button id="refreshOrdersButton" class="btn ghost">Refresh</button></div>
+          <div class="order-cleanup-toolbar">
+            <select id="oldOrderDays"><option value="30">Older than 30 days</option><option value="60">Older than 60 days</option><option value="90">Older than 90 days</option></select>
+            <button id="deleteOldOrdersButton" class="btn danger" type="button">Delete old completed orders</button>
+          </div>
           <div id="adminOrders" class="admin-list"></div>
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Stock History</h3><button id="refreshInventoryButton" class="btn ghost">Refresh</button></div>
           <div id="stockHistory" class="admin-list"></div>
+        </section>
+
+        <section id="usersTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar"><h3>Admin Users</h3><button id="refreshAdminsButton" class="btn ghost" type="button">Refresh</button></div>
+          <form id="addAdminForm" class="inline-admin-form">
+            <input id="newAdminEmail" type="email" required placeholder="staff@email.com">
+            <button class="btn primary" type="submit">Add Admin</button>
+          </form>
+          <p id="adminUsersMessage" class="form-message"></p>
+          <div id="adminUsersList" class="admin-list"></div>
         </section>
 
         <section id="settingsTab" class="admin-tab-panel hidden">
