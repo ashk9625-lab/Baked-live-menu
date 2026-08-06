@@ -57,12 +57,9 @@ function renderProducts(){
   $('#status').textContent=`Showing ${shown.length} of ${products.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
-    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><label>Qty<input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" ${p.stock<=0?'disabled':''}></label><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${p.stock<=0?'disabled':''}>${p.stock>0?'Add to cart':'Unavailable'}</button></div></div></div></article>`;
+    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${p.stock<=0?'disabled':''}>${p.stock>0?'Add to cart':'Unavailable'}</button></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
-  $$('.add-button').forEach(b=>b.onclick=()=>{
-    const input=document.querySelector(`.product-quantity[data-id="${CSS.escape(b.dataset.id)}"]`);
-    addToCart(b.dataset.id,Number(input?.value||1));
-  });
+  $$('.add-button').forEach(b=>b.onclick=()=>addToCart(b.dataset.id));
 }
 async function loadProducts(){
   try{
@@ -72,15 +69,12 @@ async function loadProducts(){
   }catch(e){ products=FALLBACK_PRODUCTS; $('#status').textContent='Showing starter catalogue — live inventory connection pending'; }
   updateStats(); buildFilters(); renderProducts(); updateCart();
 }
-function addToCart(id,requestedQuantity=1){
-  const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
-  const amount=Math.floor(Number(requestedQuantity));
-  if(!Number.isFinite(amount)||amount<1)return toast('Enter a valid quantity');
-  const item=cart.find(x=>String(x.id)===String(id));
-  const current=item?item.quantity:0;
-  if(current+amount>p.stock)return toast(`Only ${p.stock-current} more available`);
-  item?item.quantity+=amount:cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
-  persistCart(); toast(`${amount} × ${p.name} added to cart`);
+function addToCart(id){
+  const p=products.find(x=>x.id===id); if(!p||p.stock<=0)return;
+  const item=cart.find(x=>x.id===id); const qty=item?item.quantity:0;
+  if(qty>=p.stock)return toast('No more stock is available');
+  item?item.quantity++:cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:1,stock:p.stock});
+  persistCart(); toast(`${p.name} added to cart`);
 }
 function changeQty(id,change){
   const item=cart.find(x=>x.id===id); if(!item)return;
@@ -96,77 +90,80 @@ function updateCart(){
 }
 function openDrawer(){ $('#cartDrawer').classList.add('open'); $('#drawerBackdrop').classList.remove('hidden'); $('#cartDrawer').setAttribute('aria-hidden','false'); }
 function closeOverlays(){ $$('.drawer').forEach(x=>x.classList.remove('open')); $$('.modal').forEach(x=>x.classList.add('hidden')); $('#drawerBackdrop').classList.add('hidden'); }
-let lastCompletedOrder = null;
+const WHATSAPP_ORDER_NUMBER = '27678454691';
 
-function normalisePhone(value=''){
-  let digits=String(value).replace(/\D/g,'');
-  if(digits.startsWith('0')) digits='27'+digits.slice(1);
-  return digits;
-}
+function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
+  const total = orderedItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+  const itemLines = orderedItems.map(item =>
+    `${item.quantity} x ${item.name} - ${money(Number(item.price) * Number(item.quantity))}`
+  );
 
-function buildWhatsAppMessage(order){
-  const lines=[
-    `*BAKED ORDER ${order.orderNo}*`,
-    `Customer: ${order.customerName}`,
-    `Cellphone: ${order.customerPhone}`,
+  return [
+    '*NEW BAKED LIVE MENU ORDER*',
     '',
-    ...order.items.map(i=>`${i.quantity} x ${i.name} — ${money(i.quantity*i.price)}`),
+    `Order: ${orderNo}`,
+    `Customer: ${customerName}`,
+    `Phone: ${customerPhone}`,
     '',
-    `*Total: ${money(order.total)}*`
-  ];
-  if(order.note) lines.push(`Note: ${order.note}`);
-  lines.push('',`Order placed: ${new Date(order.createdAt).toLocaleString('en-ZA')}`);
-  return lines.join('\n');
-}
-
-const WHATSAPP_RECIPIENTS = [
-  { key:'main-office', label:'Main Office', number:'27720456823' },
-  { key:'packing', label:'Packing', number:'27678454691' }
-];
-
-function sendOrderWhatsApp(recipientKey){
-  if(!lastCompletedOrder)return;
-  const recipient=WHATSAPP_RECIPIENTS.find(r=>r.key===recipientKey);
-  if(!recipient)return;
-  const message=encodeURIComponent(buildWhatsAppMessage(lastCompletedOrder));
-  window.open(`https://wa.me/${recipient.number}?text=${message}`,'_blank','noopener');
-}
-
-function printInvoice(){
-  if(!lastCompletedOrder)return;
-  const o=lastCompletedOrder;
-  const rows=o.items.map(i=>`<tr><td>${escapeHtml(i.name)}</td><td>${i.quantity}</td><td>${money(i.price)}</td><td>${money(i.quantity*i.price)}</td></tr>`).join('');
-  const invoice=window.open('','_blank','width=900,height=700');
-  if(!invoice)return toast('Allow pop-ups to print the invoice');
-  invoice.document.write(`<!doctype html><html><head><title>Invoice ${escapeHtml(o.orderNo)}</title><style>
-    body{font-family:Arial,sans-serif;color:#111;padding:36px;max-width:850px;margin:auto}h1{margin:0;font-size:32px}.brand{color:#176b3a}.meta{margin:8px 0 28px;color:#555}.details{display:flex;justify-content:space-between;gap:30px;margin-bottom:28px}.details div{flex:1}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;border-bottom:1px solid #ddd}th{background:#f4f4f4}.total{text-align:right;font-size:22px;font-weight:700;margin-top:24px}.note{margin-top:24px;padding:14px;background:#f7f7f7}.footer{margin-top:36px;color:#666;font-size:12px}@media print{button{display:none}body{padding:0}}</style></head><body>
-    <h1 class="brand">BAKED</h1><div class="meta">Order Invoice</div>
-    <div class="details"><div><strong>Invoice / Order No.</strong><br>${escapeHtml(o.orderNo)}<br><br><strong>Date</strong><br>${new Date(o.createdAt).toLocaleString('en-ZA')}</div><div><strong>Customer</strong><br>${escapeHtml(o.customerName)}<br>${escapeHtml(o.customerPhone)}</div></div>
-    <table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Line total</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="total">Total: ${money(o.total)}</div>${o.note?`<div class="note"><strong>Order note:</strong><br>${escapeHtml(o.note)}</div>`:''}
-    <div class="footer">Thank you for your order.</div>
-    <script>window.onload=()=>window.print()<\/script></body></html>`);
-  invoice.document.close();
-}
-
-function showOrderActions(orderNo){
-  $('#checkoutMessage').innerHTML=`<strong>Order ${escapeHtml(orderNo)} submitted successfully.</strong><div class="order-success-actions">${WHATSAPP_RECIPIENTS.map(r=>`<button type="button" class="btn whatsapp send-whatsapp-order" data-recipient="${r.key}">Send to ${escapeHtml(r.label)}</button>`).join('')}<button type="button" class="btn ghost" id="printOrderInvoice">Print invoice</button></div>`;
-  $$('.send-whatsapp-order').forEach(button=>button.onclick=()=>sendOrderWhatsApp(button.dataset.recipient));
-  $('#printOrderInvoice').onclick=printInvoice;
+    '*Items:*',
+    ...itemLines,
+    '',
+    `*Total: ${money(total)}*`,
+    note ? `Note: ${note}` : '',
+    '',
+    'Please confirm availability and collection/delivery details.'
+  ].filter(Boolean).join('\n');
 }
 
 async function placeOrder(e){
-  e.preventDefault(); const btn=$('#placeOrderButton'); btn.disabled=true; $('#checkoutMessage').textContent='Submitting order…';
+  e.preventDefault();
+
+  const btn=$('#placeOrderButton');
+  const customerName=$('#customerName').value.trim();
+  const customerPhone=$('#customerPhone').value.trim();
+  const note=$('#customerNote').value.trim();
+  const orderedItems=cart.map(item=>({...item}));
+
+  // Open a blank tab immediately so browsers do not block WhatsApp after the database request.
+  const whatsappWindow=window.open('about:blank','_blank');
+
+  btn.disabled=true;
+  $('#checkoutMessage').textContent='Submitting order…';
+
   try{
     if(cart.some(i=>String(i.id).startsWith('demo-'))) throw new Error('The live database has no products yet. Add products in Admin before accepting orders.');
-    const orderItems=cart.map(i=>({...i}));
-    const customerName=$('#customerName').value.trim();
-    const customerPhone=$('#customerPhone').value.trim();
-    const note=$('#customerNote').value.trim();
-    const orderNo=await api('/rest/v1/rpc/place_order',{method:'POST',body:JSON.stringify({p_customer_name:customerName,p_customer_phone:customerPhone,p_note:note,p_items:orderItems.map(i=>({product_id:i.id,quantity:i.quantity}))})});
-    lastCompletedOrder={orderNo,customerName,customerPhone,phoneInternational:normalisePhone(customerPhone),note,items:orderItems,total:orderItems.reduce((sum,i)=>sum+i.quantity*i.price,0),createdAt:new Date().toISOString()};
-    cart=[]; persistCart(); e.target.reset(); showOrderActions(orderNo); toast(`Order ${orderNo} received`); await loadProducts();
-  }catch(err){ $('#checkoutMessage').textContent=err.message; }
+
+    const orderNo=await api('/rest/v1/rpc/place_order',{
+      method:'POST',
+      body:JSON.stringify({
+        p_customer_name:customerName,
+        p_customer_phone:customerPhone,
+        p_note:note,
+        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.quantity}))
+      })
+    });
+
+    const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
+    const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
+
+    cart=[];
+    persistCart();
+    e.target.reset();
+    $('#checkoutMessage').textContent=`Order ${orderNo} submitted successfully. Opening WhatsApp…`;
+    toast(`Order ${orderNo} received`);
+
+    if(whatsappWindow){
+      whatsappWindow.location.href=whatsappUrl;
+    }else{
+      window.location.href=whatsappUrl;
+    }
+
+    await loadProducts();
+  }catch(err){
+    if(whatsappWindow) whatsappWindow.close();
+    $('#checkoutMessage').textContent=err.message;
+  }
+
   btn.disabled=false;
 }
 
