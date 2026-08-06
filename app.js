@@ -10,6 +10,8 @@ const FALLBACK_PRODUCTS = [
 ];
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
+let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
+let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const money = (v) => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:0}).format(Number(v||0));
 const initials = (name) => name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
@@ -57,7 +59,7 @@ function renderProducts(){
   $('#status').textContent=`Showing ${shown.length} of ${products.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
-    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${p.stock<=0?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${p.stock<=0?'disabled':''}>${p.stock>0?'Add to cart':'Unavailable'}</button></div></div></div></article>`;
+    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=()=>{ const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1)); });
 }
@@ -67,7 +69,7 @@ async function loadProducts(){
     products=data;
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
-  updateStats(); buildFilters(); renderProducts(); updateCart();
+  updateStats(); buildFilters(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
@@ -198,7 +200,7 @@ async function login(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory()]); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true)]); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -210,10 +212,11 @@ async function loadAdminProducts(){
   try{ const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc',{auth:true}); renderAdminProducts(data); }catch(err){ $('#adminProducts').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; }
 }
 function renderAdminProducts(data){
-  $('#adminProducts').innerHTML=data.length?data.map(p=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${initials(p.name)}</span><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)} · ${escapeHtml(p.group_name||p.category)} · ${money(p.price)}</small></div></div><div class="admin-row-data"><span class="stock-number ${p.stock<=p.reorder_level?'warning':''}">${p.stock} units</span><span class="visibility ${p.active?'active':'inactive'}">${p.active?'Visible':'Hidden'}</span><button class="btn ghost compact edit-product" data-id="${p.id}">Edit</button><button class="btn ghost compact stock-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Stock</button><button class="btn danger compact delete-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No products yet</h3><p>Add your first live menu product.</p></div>';
+  $('#adminProducts').innerHTML=data.length?data.map(p=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${initials(p.name)}</span><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)} · ${escapeHtml(p.group_name||p.category)} · ${money(p.price)}</small></div></div><div class="admin-row-data"><span class="stock-number ${p.stock<=p.reorder_level?'warning':''}">${p.stock} units</span><span class="visibility ${p.active?'active':'inactive'}">${p.active?'Visible':'Hidden'}</span><button class="btn ghost compact feature-product" data-id="${p.id}">${p.featured?'★ Featured':'☆ Feature'}</button><button class="btn ghost compact edit-product" data-id="${p.id}">Edit</button><button class="btn ghost compact stock-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Stock</button><button class="btn danger compact delete-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No products yet</h3><p>Add your first live menu product.</p></div>';
   $$('.edit-product').forEach(b=>b.onclick=()=>openProductModal(data.find(p=>String(p.id)===String(b.dataset.id))));
   $$('.stock-product').forEach(b=>b.onclick=()=>openStockModal(b.dataset.id,b.dataset.name));
   $$('.delete-product').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.id,b.dataset.name,b));
+  $$('.feature-product').forEach(b=>b.onclick=()=>toggleFeatured(b.dataset.id,data.find(p=>String(p.id)===String(b.dataset.id))?.featured));
 }
 async function deleteProduct(id,name,button){
   if(!confirm(`Permanently delete "${name}"?\n\nThis removes it from the database and cannot be undone.`)) return;
@@ -238,12 +241,12 @@ async function deleteProduct(id,name,button){
 }
 
 function openProductModal(p=null){
-  $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productId').value=p?.id||'';
-  if(p){ $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=p.description||'';$('#productActive').checked=p.active; }
+  $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
+  if(p){ $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=p.description||'';$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
-  e.preventDefault(); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:$('#productDescription').value.trim(),active:$('#productActive').checked,updated_at:new Date().toISOString()};
+  e.preventDefault(); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:$('#productDescription').value.trim(),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
   try{ await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)}); closeOverlays(); toast(id?'Product updated':'Product added'); await Promise.all([loadAdminProducts(),loadProducts()]); }catch(err){ $('#productFormMessage').textContent=err.message; }
 }
@@ -263,6 +266,40 @@ async function setOrderStatus(id,status){ try{await api('/rest/v1/rpc/set_order_
 async function loadInventory(){
   try{ const rows=await api('/rest/v1/stock_movements?select=*,products(name)&order=created_at.desc&limit=100',{auth:true}); $('#stockHistory').innerHTML=rows.length?rows.map(r=>`<article class="admin-row"><div class="admin-row-main"><span class="movement ${r.quantity>=0?'positive':'negative'}">${r.quantity>=0?'+':''}${r.quantity}</span><div><strong>${escapeHtml(r.products?.name||'Product')}</strong><small>${escapeHtml(r.movement_type)} · ${escapeHtml(r.reference||'No reference')}</small></div></div><time>${new Date(r.created_at).toLocaleString('en-ZA')}</time></article>`).join(''):'<div class="empty-state"><h3>No stock history yet</h3></div>'; }catch(err){$('#stockHistory').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
+
+function timeToMinutes(value='00:00'){const [h,m]=String(value).slice(0,5).split(':').map(Number);return (h||0)*60+(m||0)}
+function orderingAllowed(){
+  if(!siteSettings.store_open)return false;
+  if(!siteSettings.auto_hours)return true;
+  const now=new Date(), current=now.getHours()*60+now.getMinutes(), open=timeToMinutes(siteSettings.opening_time), close=timeToMinutes(siteSettings.closing_time);
+  return open<=close ? current>=open&&current<close : current>=open||current<close;
+}
+async function loadSiteSettings(forAdmin=false){
+  try{const rows=await api('/rest/v1/site_settings?select=*&id=eq.1');if(rows?.[0])siteSettings=rows[0];}catch(e){console.warn('Settings unavailable',e)}
+  applySiteSettings();
+  if(forAdmin){$('#settingStoreOpen').checked=!!siteSettings.store_open;$('#settingAutoHours').checked=!!siteSettings.auto_hours;$('#settingOpeningTime').value=String(siteSettings.opening_time||'09:00').slice(0,5);$('#settingClosingTime').value=String(siteSettings.closing_time||'18:00').slice(0,5);$('#settingBannerText').value=siteSettings.banner_text||'';}
+}
+function applySiteSettings(){
+  const banner=$('#storeBanner'), closed=$('#storeClosedNotice');
+  if(siteSettings.banner_text){banner.textContent=siteSettings.banner_text;banner.classList.remove('hidden')}else banner.classList.add('hidden');
+  closed.classList.toggle('hidden',orderingAllowed());
+  const place=$('#placeOrderButton');if(place){place.disabled=!orderingAllowed();place.textContent=orderingAllowed()?'Place order':'Store closed';}
+}
+async function saveSiteSettings(e){
+  e.preventDefault(); const payload={store_open:$('#settingStoreOpen').checked,auto_hours:$('#settingAutoHours').checked,opening_time:$('#settingOpeningTime').value||'09:00',closing_time:$('#settingClosingTime').value||'18:00',banner_text:$('#settingBannerText').value.trim(),updated_at:new Date().toISOString()};
+  $('#settingsStatus').textContent='Saving…';
+  try{await api('/rest/v1/site_settings?id=eq.1',{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});siteSettings={...siteSettings,...payload};applySiteSettings();renderProducts();renderFeaturedProducts();$('#settingsStatus').textContent='Saved';toast('Store settings saved')}catch(err){$('#settingsStatus').textContent=err.message}
+}
+function renderFeaturedProducts(){
+  const section=$('#featuredSection'),grid=$('#featuredGrid'); if(!section||!grid)return;
+  const featured=products.filter(p=>p.featured&&p.active);
+  section.classList.toggle('hidden',featured.length===0);
+  grid.innerHTML=featured.map(p=>{const [state,label]=stockState(p),img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}">`:`<div class="placeholder">${initials(p.name)}</div>`;return `<article class="product-card featured-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><p class="eyebrow accent">FEATURED</p><h3>${escapeHtml(p.name)}</h3><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity featured-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" ${p.stock<=0||!orderingAllowed()?'disabled':''}><button class="btn primary featured-add" data-id="${p.id}" ${p.stock<=0||!orderingAllowed()?'disabled':''}>${orderingAllowed()?'Add':'Closed'}</button></div></div></div></article>`}).join('');
+  $$('.featured-add').forEach(b=>b.onclick=()=>addToCart(b.dataset.id,Number(document.querySelector(`.featured-quantity[data-id="${b.dataset.id}"]`)?.value||1)));
+}
+async function toggleFeatured(id,current){try{await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({featured:!current,updated_at:new Date().toISOString()})});toast(!current?'Product featured':'Product unfeatured');await Promise.all([loadAdminProducts(),loadProducts()])}catch(err){toast(err.message)}}
+function compressImage(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=900,scale=Math.min(1,max/Math.max(img.width,img.height)),canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.78))};img.src=reader.result};reader.readAsDataURL(file)})}
+
 function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); }
 
 function luhnValidSouthAfricanId(idNumber){
@@ -319,6 +356,10 @@ function verifyCustomerAge(event){
   input.value='';
   $('#ageGate').classList.add('hidden');
 }
+$('#productImageFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;$('#productFormMessage').textContent='Preparing photo…';try{$('#productImage').value=await compressImage(file);$('#productFormMessage').textContent='Photo ready'}catch{$('#productFormMessage').textContent='Could not process photo'}});
+$('#settingsForm').addEventListener('submit',saveSiteSettings);
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
+$('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
 $('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
 $('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,13)});
 $('#leaveSite').onclick=()=>location.href='https://www.google.com';
@@ -329,4 +370,4 @@ $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmi
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOverlays()});
-loadProducts();
+loadSiteSettings().then(loadProducts);

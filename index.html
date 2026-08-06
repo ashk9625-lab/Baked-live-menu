@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -44,6 +46,8 @@
 
   <main>
     <section id="storeView">
+      <div id="storeBanner" class="store-banner hidden"></div>
+      <div id="storeClosedNotice" class="store-closed hidden"><strong>Store currently closed</strong><span>Customers may browse, but ordering is temporarily unavailable.</span></div>
       <section class="hero">
         <div>
           <p class="eyebrow accent">AVAILABLE TODAY</p>
@@ -63,6 +67,7 @@
         <select id="stockFilter"><option value="all">All availability</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
       </section>
 
+      <section id="featuredSection" class="featured-section hidden"><div class="section-heading"><div><p class="eyebrow accent">FEATURED</p><h2>Featured products</h2></div></div><div id="featuredGrid" class="product-grid featured-grid"></div></section>
       <div id="categoryChips" class="chips"></div>
       <div id="status" class="status">Loading live stock…</div>
       <section id="productGrid" class="product-grid"></section>
@@ -93,6 +98,7 @@
           <button class="admin-tab active" data-tab="products">Products</button>
           <button class="admin-tab" data-tab="orders">Orders</button>
           <button class="admin-tab" data-tab="inventory">Inventory</button>
+          <button class="admin-tab" data-tab="settings">Settings</button>
         </div>
 
         <section id="productsTab" class="admin-tab-panel">
@@ -108,6 +114,19 @@
         <section id="inventoryTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Stock History</h3><button id="refreshInventoryButton" class="btn ghost">Refresh</button></div>
           <div id="stockHistory" class="admin-list"></div>
+        </section>
+
+        <section id="settingsTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar"><h3>Store Settings</h3><span id="settingsStatus" class="status-inline"></span></div>
+          <form id="settingsForm" class="settings-grid">
+            <label class="switch-row"><span><strong>Store open</strong><small>Turn ordering on or off immediately.</small></span><input id="settingStoreOpen" type="checkbox"></label>
+            <label class="switch-row"><span><strong>Use business hours</strong><small>Automatically allow orders only between these times.</small></span><input id="settingAutoHours" type="checkbox"></label>
+            <label>Opening time<input id="settingOpeningTime" type="time"></label>
+            <label>Closing time<input id="settingClosingTime" type="time"></label>
+            <label class="full">Customer banner<input id="settingBannerText" maxlength="160" placeholder="New products available today"></label>
+            <button class="btn primary wide full" type="submit">Save store settings</button>
+          </form>
+          <div class="pwa-card"><div><strong>Install Admin App</strong><small>Add this website to your phone home screen for faster access.</small></div><button id="installAppButton" class="btn ghost" type="button">Install</button></div>
         </section>
       </div>
     </section>
@@ -144,8 +163,10 @@
         <label>Current stock<input id="productStock" type="number" min="0" required></label>
         <label>Low-stock level<input id="productReorder" type="number" min="0" value="5" required></label>
         <label class="full">Image URL<input id="productImage" type="url" placeholder="https://..."></label>
+        <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
         <label class="full">Description<textarea id="productDescription" rows="3"></textarea></label>
         <label class="check full"><input id="productActive" type="checkbox" checked> Visible on live menu</label>
+        <label class="check full"><input id="productFeatured" type="checkbox"> Feature at top of menu</label>
         <div class="modal-actions full"><button type="button" class="btn ghost" data-close="productModal">Cancel</button><button type="submit" class="btn primary">Save product</button></div>
       </form>
       <p id="productFormMessage" class="form-message"></p>
@@ -170,5 +191,6 @@
 
   <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span></footer>
   <script src="app.js"></script>
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));}</script>
 </body>
 </html>
