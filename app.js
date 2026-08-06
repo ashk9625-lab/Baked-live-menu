@@ -265,9 +265,64 @@ async function loadInventory(){
 }
 function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); }
 
-$('#confirmAge').onclick=()=>{localStorage.setItem('baked-age-confirmed','yes');$('#ageGate').classList.add('hidden')};
+function luhnValidSouthAfricanId(idNumber){
+  if(!/^\d{13}$/.test(idNumber)) return false;
+  let oddSum=0;
+  for(let i=0;i<12;i+=2) oddSum+=Number(idNumber[i]);
+  const evenNumber=Number(idNumber.slice(1,12).split('').filter((_,i)=>i%2===0).join(''))*2;
+  const evenSum=String(evenNumber).split('').reduce((sum,d)=>sum+Number(d),0);
+  const check=(10-((oddSum+evenSum)%10))%10;
+  return check===Number(idNumber[12]);
+}
+function birthDateFromSouthAfricanId(idNumber){
+  const yy=Number(idNumber.slice(0,2));
+  const mm=Number(idNumber.slice(2,4));
+  const dd=Number(idNumber.slice(4,6));
+  const today=new Date();
+  const currentYY=today.getFullYear()%100;
+  const year=yy<=currentYY?2000+yy:1900+yy;
+  const birthDate=new Date(year,mm-1,dd);
+  if(birthDate.getFullYear()!==year||birthDate.getMonth()!==mm-1||birthDate.getDate()!==dd||birthDate>today) return null;
+  return birthDate;
+}
+function ageOnDate(birthDate,today=new Date()){
+  let age=today.getFullYear()-birthDate.getFullYear();
+  const beforeBirthday=today.getMonth()<birthDate.getMonth()||(today.getMonth()===birthDate.getMonth()&&today.getDate()<birthDate.getDate());
+  if(beforeBirthday) age--;
+  return age;
+}
+function verifyCustomerAge(event){
+  event.preventDefault();
+  const input=$('#customerIdNumber');
+  const message=$('#ageCheckMessage');
+  const idNumber=input.value.replace(/\s+/g,'');
+  input.value=idNumber;
+  message.textContent='';
+  if(!/^\d{13}$/.test(idNumber)){
+    message.textContent='Please enter a valid 13-digit South African ID number.';
+    input.focus();
+    return;
+  }
+  const birthDate=birthDateFromSouthAfricanId(idNumber);
+  if(!birthDate||!luhnValidSouthAfricanId(idNumber)){
+    message.textContent='This ID number is not valid. Please check it and try again.';
+    input.focus();
+    return;
+  }
+  if(ageOnDate(birthDate)<18){
+    message.textContent='Access denied. You must be 18 or older to enter this site.';
+    input.value='';
+    input.focus();
+    return;
+  }
+  sessionStorage.setItem('baked-age-verified','yes');
+  input.value='';
+  $('#ageGate').classList.add('hidden');
+}
+$('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
+$('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,13)});
 $('#leaveSite').onclick=()=>location.href='https://www.google.com';
-if(localStorage.getItem('baked-age-confirmed')==='yes') $('#ageGate').classList.add('hidden');
+if(sessionStorage.getItem('baked-age-verified')==='yes') $('#ageGate').classList.add('hidden');
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
 $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#refreshInventoryButton').onclick=loadInventory;

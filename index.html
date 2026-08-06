@@ -16,9 +16,16 @@
     <div class="age-card">
       <div class="brand-mark">B</div>
       <p class="eyebrow">BAKED AFRICA</p>
-      <h1>Adults only</h1>
-      <p>This live menu is intended for verified adult customers. Please confirm that you are 18 or older.</p>
-      <button id="confirmAge" class="btn primary wide">I am 18 or older</button>
+      <h1>Age verification</h1>
+      <p>Enter your 13-digit South African ID number. The site checks the ID format and birth date to confirm that you are 18 or older.</p>
+      <form id="ageVerificationForm" class="form-stack age-form" novalidate>
+        <label>South African ID number
+          <input id="customerIdNumber" type="text" inputmode="numeric" autocomplete="off" maxlength="13" placeholder="YYMMDDSSSSCAZ" aria-describedby="ageCheckMessage" required>
+        </label>
+        <button id="verifyAgeButton" class="btn primary wide" type="submit">Verify and enter</button>
+      </form>
+      <p id="ageCheckMessage" class="form-message age-message" role="alert"></p>
+      <p class="privacy-note">Your ID number is checked only in this browser and is not saved or sent with your order.</p>
       <button id="leaveSite" class="btn ghost wide">Leave</button>
     </div>
   </div>
