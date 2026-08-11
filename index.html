@@ -40,7 +40,6 @@
     <div class="top-actions">
       <span class="live-pill"><i></i> Live stock</span>
       <button id="surpriseButton" class="btn surprise-header compact">🎲 Surprise Me</button>
-      <button id="memberButton" class="btn ghost compact">Membership Card</button>
       <button id="adminButton" class="btn ghost compact">Admin</button>
       <button id="cartButton" class="cart-button" aria-label="Open cart">Cart <span id="cartCount">0</span></button>
     </div>
@@ -183,8 +182,6 @@
     <div id="cartEmpty" class="empty-state"><h3>Your cart is empty</h3><p>Add products from the live menu to begin.</p></div>
     <div id="checkoutArea" class="checkout hidden">
       <div class="cart-total"><span>Total</span><strong id="cartTotal">R0</strong></div>
-      <button id="applyCreditButton" class="btn ghost" type="button" style="width:100%;margin-bottom:10px">Apply Store Credit</button>
-      <div id="creditSummary" class="credit-summary hidden"><span>Store credit applied: <strong id="creditApplied">R0</strong></span><span>Balance to pay: <strong id="creditRemaining">R0</strong></span></div>
       <form id="checkoutForm" class="form-stack">
         <label>Customer name<input id="customerName" required maxlength="80"></label>
         <label>Cellphone number<input id="customerPhone" required maxlength="30" inputmode="tel"></label>
@@ -248,7 +245,6 @@
     <div id="surpriseResult"></div>
   </div>
 </div>
-<div id="memberModal" class="modal hidden" aria-hidden="true"><div class="modal-card member-modal-card"><button id="memberClose" class="icon-button member-close" type="button">×</button><div id="memberModalBody"></div></div></div>
 <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span></footer>
   <script src="app.js"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));}</script>

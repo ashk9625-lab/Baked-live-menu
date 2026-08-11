@@ -466,23 +466,6 @@ function runSurpriseMe(){
   $('#surpriseAgain').onclick=runSurpriseMe;
 }
 
-/* ===== DIGITAL MEMBERSHIP + STORE CREDIT ===== */
-const MEMBER_KEY='baked-member-profile';
-function getMember(){try{return JSON.parse(localStorage.getItem(MEMBER_KEY)||'null')}catch{return null}}
-function saveMember(m){localStorage.setItem(MEMBER_KEY,JSON.stringify(m))}
-function memberNo(){return 'BKD-'+String(Date.now()).slice(-8)}
-function ensureMemberDefaults(m){if(!m)return null;if(typeof m.storeCredit!=='number')m.storeCredit=0;return m}
-function openMemberCard(){
- let m=ensureMemberDefaults(getMember()), modal=$('#memberModal'), body=$('#memberModalBody'); if(!modal||!body)return;
- if(!m){body.innerHTML=`<div class="member-card-preview"><div class="member-card-brand">BAKED</div><h2>DIGITAL MEMBERSHIP</h2><p>Create your Baked membership card.</p></div><form id="memberCreateForm" class="member-form"><label>Full name<input id="memberName" required maxlength="80"></label><label>Cellphone number<input id="memberPhone" required maxlength="30" inputmode="tel"></label><button class="btn primary" type="submit">Create membership card</button></form>`; $('#memberCreateForm').onsubmit=e=>{e.preventDefault();m={name:$('#memberName').value.trim(),phone:$('#memberPhone').value.trim(),memberNumber:memberNo(),joined:new Date().toLocaleDateString('en-ZA'),storeCredit:0};saveMember(m);toast('Digital membership card created');openMemberCard();};}
- else {body.innerHTML=`<div class="member-card-preview"><div class="member-card-brand">BAKED</div><div class="member-card-sub">THE BAKED VAULT</div><h2>${escapeHtml(m.name)}</h2><div class="member-number">${escapeHtml(m.memberNumber)}</div><div class="member-credit-label">STORE CREDIT</div><div class="member-credit">${money(m.storeCredit)}</div><div class="member-card-bottom"><span>ACTIVE MEMBER</span><small>Member since ${escapeHtml(m.joined)}</small></div></div><div class="member-actions"><button id="memberUseCheckout" class="btn primary" type="button">Use at checkout</button><button id="memberEdit" class="btn ghost" type="button">Edit details</button>${accessToken?'<button id="memberCreditManage" class="btn ghost" type="button">Manage store credit</button>':''}</div>`; $('#memberUseCheckout').onclick=()=>{if($('#customerName'))$('#customerName').value=m.name;if($('#customerPhone'))$('#customerPhone').value=m.phone;closeMemberModal();toast('Member details added to checkout');}; $('#memberEdit').onclick=()=>{localStorage.removeItem(MEMBER_KEY);openMemberCard();}; if($('#memberCreditManage'))$('#memberCreditManage').onclick=manageMemberCredit;}
- modal.classList.remove('hidden');
-}
-function closeMemberModal(){if($('#memberModal'))$('#memberModal').classList.add('hidden')}
-function manageMemberCredit(){if(!accessToken)return toast('Admin login required');let m=ensureMemberDefaults(getMember());if(!m)return toast('Create a membership card first');const raw=prompt(`Current store credit: ${money(m.storeCredit)}\\n\\nEnter amount to ADD. Use a negative amount to deduct:`,'0');if(raw===null)return;const amt=Number(String(raw).replace(/[^0-9.-]/g,''));if(!Number.isFinite(amt)||amt===0)return toast('Enter a valid amount');m.storeCredit=Math.max(0,Number(m.storeCredit||0)+amt);saveMember(m);toast(`Store credit updated: ${money(m.storeCredit)}`);openMemberCard();}
-function applyMemberCreditToCart(){let m=ensureMemberDefaults(getMember());if(!m)return toast('Create your membership card first');const total=cart.reduce((s,i)=>s+Number(i.price)*Number(i.quantity),0);if(total<=0)return toast('Your cart is empty');if(m.storeCredit<=0)return toast('No store credit available');const use=Math.min(total,m.storeCredit),remaining=total-use;$('#creditApplied').textContent=money(use);$('#creditRemaining').textContent=money(remaining);$('#creditSummary').classList.remove('hidden');sessionStorage.setItem('baked-credit-use',String(use));toast(`${money(use)} store credit applied`);}
-function clearMemberCreditUse(){sessionStorage.removeItem('baked-credit-use');if($('#creditSummary'))$('#creditSummary').classList.add('hidden')}
-
 $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
 $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
@@ -490,9 +473,6 @@ $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
 $('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeOverlays();closeMemberModal();}});
-if($('#memberButton')) $('#memberButton').onclick=openMemberCard;
-if($('#memberClose')) $('#memberClose').onclick=closeMemberModal;
-if($('#applyCreditButton')) $('#applyCreditButton').onclick=applyMemberCreditToCart;
 if($('#surpriseButton')) $('#surpriseButton').onclick=openSurpriseMe;
 if($('#surpriseClose')) $('#surpriseClose').onclick=closeSurpriseMe;
 if($('#surpriseGo')) $('#surpriseGo').onclick=runSurpriseMe;
