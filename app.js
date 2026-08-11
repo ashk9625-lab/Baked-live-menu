@@ -204,11 +204,7 @@ async function placeOrder(e){
       window.location.href=whatsappUrl;
     }
 
-    await 
-if($('#memberButton')) $('#memberButton').onclick=openMemberCard;
-if($('#memberClose')) $('#memberClose').onclick=closeMemberModal;
-if($('#applyCreditButton')) $('#applyCreditButton').onclick=applyMemberCreditToCart;
-loadProducts();
+    await loadProducts();
   }catch(err){
     if(whatsappWindow) whatsappWindow.close();
     $('#checkoutMessage').textContent=err.message;
@@ -461,5 +457,8 @@ $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
 $('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOverlays()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeOverlays();closeMemberModal();}});
+if($('#memberButton')) $('#memberButton').onclick=openMemberCard;
+if($('#memberClose')) $('#memberClose').onclick=closeMemberModal;
+if($('#applyCreditButton')) $('#applyCreditButton').onclick=applyMemberCreditToCart;
 loadSiteSettings().then(loadProducts);
