@@ -254,22 +254,23 @@ function renderAdminProducts(data){
   $$('.feature-product').forEach(b=>b.onclick=()=>toggleFeatured(b.dataset.id,data.find(p=>String(p.id)===String(b.dataset.id))?.featured));
 }
 async function deleteProduct(id,name,button){
-  if(!confirm(`Permanently delete "${name}"?\n\nThis removes it from the database and cannot be undone.`)) return;
+  if(!confirm(`Permanently delete "${name}"?\n\nThis removes it from the live menu and cannot be undone.`)) return;
   const originalText=button.textContent;
   button.disabled=true;
   button.textContent='Deleting…';
   try{
-    await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}`,{
-      method:'DELETE',
+    await api('/rest/v1/rpc/delete_product_admin',{
+      method:'POST',
       auth:true,
-      headers:{Prefer:'return=minimal'}
+      body:{p_product_id:id}
     });
     cart=cart.filter(item=>String(item.id)!==String(id));
     persistCart();
     toast(`${name} permanently deleted`);
     await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
   }catch(err){
-    toast(`Permanent delete failed: ${err.message}`);
+    console.error('Product delete failed',err);
+    toast(`Delete failed: ${err.message}`);
     button.disabled=false;
     button.textContent=originalText;
   }
