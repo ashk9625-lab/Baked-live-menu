@@ -10,6 +10,7 @@ const FALLBACK_PRODUCTS = [
 ];
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
+let activeVaultFilter='all';
 let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
 let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -50,34 +51,48 @@ function buildFilters(){
   $$('#categoryChips .chip').forEach(b=>b.onclick=()=>{ $('#categoryFilter').value=b.dataset.category; buildFilters(); renderProducts(); });
 }
 function escapeHtml(v=''){ return String(v).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+const LEGACY_NAMES=['baked alaska','exodus cheese','candy pavé','candy pave',"baker's delight",'bakers delight'];
+const vaultLabels={new:'New Drops',legacy:'Legacy Strains',platinum:'Platinum Collection',staff:'Staff Picks',limited:'Limited Edition',trending:'Trending This Week'};
+function isVaultProduct(p,type){
+  const text=`${p.name||''} ${p.group_name||''} ${p.category||''} ${p.description||''}`.toLowerCase();
+  if(type==='new'){const d=p.created_at||p.updated_at;return d?Date.now()-new Date(d).getTime()<=1000*60*60*24*45:false;}
+  if(type==='legacy')return LEGACY_NAMES.includes(String(p.name||'').toLowerCase())||text.includes('legacy');
+  if(type==='platinum')return String(p.group_name||'').toLowerCase().includes('platinum');
+  if(type==='staff')return !!p.featured;
+  if(type==='limited')return (p.stock>0&&p.stock<=Math.max(Number(p.reorder_level||0),5))||text.includes('limited');
+  if(type==='trending')return !!p.featured||text.includes('trending')||text.includes('best seller')||text.includes('popular');
+  return true;
+}
+function updateVault(){
+  const types=['new','legacy','platinum','staff','limited','trending'];
+  const ids={new:'vaultCountNew',legacy:'vaultCountLegacy',platinum:'vaultCountPlatinum',staff:'vaultCountStaff',limited:'vaultCountLimited',trending:'vaultCountTrending'};
+  types.forEach(type=>{const el=$('#'+ids[type]);if(el)el.textContent=`${products.filter(p=>isVaultProduct(p,type)).length} products`;});
+  $$('#vaultGrid .vault-card').forEach(card=>card.classList.toggle('active',card.dataset.vault===activeVaultFilter));
+  const label=$('#vaultActiveLabel'),clear=$('#clearVaultFilter');
+  if(activeVaultFilter==='all'){label?.classList.add('hidden');clear?.classList.add('hidden');}
+  else{if(label){label.textContent=`Viewing The Baked Vault: ${vaultLabels[activeVaultFilter]}`;label.classList.remove('hidden')}clear?.classList.remove('hidden');}
+}
+function setVaultFilter(type){activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
-    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state);
+    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
   });
-  $('#status').textContent=`Showing ${shown.length} of ${products.length} products`;
-  const card=p=>{
+  $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
+  $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
-  };
-  const categoryText=p=>`${p.category||''} ${p.group_name||''}`.toLowerCase().replace(/[^a-z]/g,'');
-  const preRolls=shown.filter(p=>categoryText(p).includes('preroll'));
-  const edibles=shown.filter(p=>categoryText(p).includes('edible'));
-  const other=shown.filter(p=>!categoryText(p).includes('preroll')&&!categoryText(p).includes('edible'));
-  const section=(title,subtitle,items)=>items.length?`<div class="menu-department"><div class="section-heading department-heading"><div><p class="eyebrow accent">${title}</p><h2>${title}</h2><p>${subtitle}</p></div></div><div class="department-grid">${items.map(card).join('')}</div></div>`:'';
-  $('#productGrid').innerHTML=shown.length?section('PRE-ROLLS','Browse our available pre-roll range.',preRolls)+section('EDIBLES','Browse our available edible range.',edibles)+section('OTHER PRODUCTS','Browse the rest of our live menu.',other):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
+  }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=()=>{ const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1)); });
 }
 async function loadProducts(){
   try{
     const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc');
     products=data;
-    cart=cart.filter(item=>products.some(p=>String(p.id)===String(item.id)));
-    localStorage.setItem('baked-cart',JSON.stringify(cart));
-    $('#status').textContent=products.length?'Connected to live inventory':'No products are currently available';
+    $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
-  updateStats(); buildFilters(); renderProducts(); renderFeaturedProducts(); updateCart();
+  updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
@@ -420,5 +435,7 @@ $('#checkoutForm').onsubmit=placeOrder; $('#adminButton').onclick=showAdmin; $('
 $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
+$$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
+$('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOverlays()});
 loadSiteSettings().then(loadProducts);
