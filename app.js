@@ -250,11 +250,12 @@ function renderAdminProducts(data){
   $('#adminProducts').innerHTML=data.length?data.map(p=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${initials(p.name)}</span><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)} · ${escapeHtml(p.group_name||p.category)} · ${money(p.price)}</small></div></div><div class="admin-row-data"><span class="stock-number ${p.stock<=p.reorder_level?'warning':''}">${p.stock} units</span><span class="visibility ${p.active?'active':'inactive'}">${p.active?'Visible':'Hidden'}</span><button class="btn ghost compact feature-product" data-id="${p.id}">${p.featured?'★ Featured':'☆ Feature'}</button><button class="btn ghost compact edit-product" data-id="${p.id}">Edit</button><button class="btn ghost compact stock-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Stock</button><button class="btn danger compact delete-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No products yet</h3><p>Add your first live menu product.</p></div>';
   $$('.edit-product').forEach(b=>b.onclick=()=>openProductModal(data.find(p=>String(p.id)===String(b.dataset.id))));
   $$('.stock-product').forEach(b=>b.onclick=()=>openStockModal(b.dataset.id,b.dataset.name));
-  $$('.delete-product').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.id,b.dataset.name,b));
+  $$('.delete-product').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.id,b.dataset.name,b,b.dataset.sku));
   $$('.feature-product').forEach(b=>b.onclick=()=>toggleFeatured(b.dataset.id,data.find(p=>String(p.id)===String(b.dataset.id))?.featured));
 }
-async function deleteProduct(id,name,button){
-  if(!confirm(`Permanently delete "${name}"?\n\nThis removes it from the live menu and cannot be undone.`)) return;
+async function deleteProduct(id,name,button,sku=''){
+  const label=sku?`${name} (${sku})`:name;
+  if(!confirm(`Permanently delete "${label}"?\n\nThis deletes this exact product record from the live menu and cannot be undone.`)) return;
   const originalText=button.textContent;
   button.disabled=true;
   button.textContent='Deleting…';
@@ -264,9 +265,23 @@ async function deleteProduct(id,name,button){
       auth:true,
       body:{p_product_id:id}
     });
+
+    const verify=await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}&select=id`,{auth:true});
+    if(Array.isArray(verify)&&verify.length){
+      throw new Error('The database still contains this exact product record');
+    }
+
     cart=cart.filter(item=>String(item.id)!==String(id));
     persistCart();
-    toast(`${name} permanently deleted`);
+
+    const sameName=await api(`/rest/v1/products?name=eq.${encodeURIComponent(name)}&select=id,name,sku,active`,{auth:true});
+    const duplicates=Array.isArray(sameName)?sameName.filter(p=>String(p.id)!==String(id)):[];
+    if(duplicates.length){
+      toast(`${label} deleted. Another product with the same name still exists.`);
+    }else{
+      toast(`${label} permanently deleted`);
+    }
+
     await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
   }catch(err){
     console.error('Product delete failed',err);
