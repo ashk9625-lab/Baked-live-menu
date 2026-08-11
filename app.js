@@ -2,12 +2,15 @@ const SUPABASE_URL = 'https://jtahitryhtrjgboqnimz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KeEZVzifnm7OT-hA1h7ueg_1QWL1wCh';
 const FALLBACK_PRODUCTS = [
   {id:'demo-1',sku:'PRE-BBC',name:'Blueberry Cheesecake',group_name:'Platinum',category:'Pre-Rolls',strength:'1g',price:120,stock:24,reorder_level:5,description:'Smooth dessert-inspired pre-roll.',image_url:null,active:true},
+  {id:'demo-2',sku:'EDI-CD25',name:'Cookie Dough',group_name:'Edibles',category:'Edibles',strength:'25mg',price:65,stock:30,reorder_level:6,description:'Soft cookie dough edible.',image_url:null,active:true},
   {id:'demo-3',sku:'FLW-PW',name:'Platinum Wreck',group_name:'Platinum',category:'Flower',strength:'1g',price:180,stock:18,reorder_level:5,description:'Premium platinum-range product.',image_url:null,active:true},
   {id:'demo-4',sku:'PRE-DSS',name:'Double Stuffed Sorbet',group_name:'Silver',category:'Pre-Rolls',strength:'1g',price:130,stock:20,reorder_level:5,description:'Bold, fruity pre-roll.',image_url:null,active:true},
+  {id:'demo-5',sku:'EDI-EC25',name:'Eye Candy',group_name:'Edibles',category:'Edibles',strength:'25mg',price:70,stock:4,reorder_level:6,description:'Colourful premium edible.',image_url:null,active:true},
   {id:'demo-6',sku:'VAP-DISP',name:'Baked Disposable Vape',group_name:'Vapes',category:'Disposable Vapes',strength:'1ml',price:350,stock:0,reorder_level:4,description:'Distillate disposable vape.',image_url:null,active:true}
 ];
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
+let activeVaultFilter='all';
 let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
 let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -48,13 +51,35 @@ function buildFilters(){
   $$('#categoryChips .chip').forEach(b=>b.onclick=()=>{ $('#categoryFilter').value=b.dataset.category; buildFilters(); renderProducts(); });
 }
 function escapeHtml(v=''){ return String(v).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+const LEGACY_NAMES=['baked alaska','exodus cheese','candy pavé','candy pave',"baker's delight",'bakers delight'];
+const vaultLabels={new:'New Drops',legacy:'Legacy Strains',platinum:'Platinum Collection',staff:'Staff Picks',limited:'Limited Edition',trending:'Trending This Week'};
+function isVaultProduct(p,type){
+  const text=`${p.name||''} ${p.group_name||''} ${p.category||''} ${p.description||''}`.toLowerCase();
+  if(type==='new'){const d=p.created_at||p.updated_at;return d?Date.now()-new Date(d).getTime()<=1000*60*60*24*45:false;}
+  if(type==='legacy')return LEGACY_NAMES.includes(String(p.name||'').toLowerCase())||text.includes('legacy');
+  if(type==='platinum')return String(p.group_name||'').toLowerCase().includes('platinum');
+  if(type==='staff')return !!p.featured;
+  if(type==='limited')return (p.stock>0&&p.stock<=Math.max(Number(p.reorder_level||0),5))||text.includes('limited');
+  if(type==='trending')return !!p.featured||text.includes('trending')||text.includes('best seller')||text.includes('popular');
+  return true;
+}
+function updateVault(){
+  const types=['new','legacy','platinum','staff','limited','trending'];
+  const ids={new:'vaultCountNew',legacy:'vaultCountLegacy',platinum:'vaultCountPlatinum',staff:'vaultCountStaff',limited:'vaultCountLimited',trending:'vaultCountTrending'};
+  types.forEach(type=>{const el=$('#'+ids[type]);if(el)el.textContent=`${products.filter(p=>isVaultProduct(p,type)).length} products`;});
+  $$('#vaultGrid .vault-card').forEach(card=>card.classList.toggle('active',card.dataset.vault===activeVaultFilter));
+  const label=$('#vaultActiveLabel'),clear=$('#clearVaultFilter');
+  if(activeVaultFilter==='all'){label?.classList.add('hidden');clear?.classList.add('hidden');}
+  else{if(label){label.textContent=`Viewing The Baked Vault: ${vaultLabels[activeVaultFilter]}`;label.classList.remove('hidden')}clear?.classList.remove('hidden');}
+}
+function setVaultFilter(type){activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
-    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state);
+    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
   });
-  $('#status').textContent=`Showing ${shown.length} of ${products.length} products`;
+  $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
@@ -64,12 +89,10 @@ function renderProducts(){
 async function loadProducts(){
   try{
     const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc');
-    products=data.filter(p=>!String(p.category||'').toLowerCase().includes('edible') && !String(p.group_name||'').toLowerCase().includes('edible'));
-    cart=cart.filter(item=>products.some(p=>String(p.id)===String(item.id)));
-    localStorage.setItem('baked-cart',JSON.stringify(cart));
-    $('#status').textContent=products.length?'Connected to live inventory':'No products are currently available';
+    products=data;
+    $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
-  updateStats(); buildFilters(); renderProducts(); renderFeaturedProducts(); updateCart();
+  updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
@@ -412,5 +435,7 @@ $('#checkoutForm').onsubmit=placeOrder; $('#adminButton').onclick=showAdmin; $('
 $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
+$$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
+$('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOverlays()});
 loadSiteSettings().then(loadProducts);

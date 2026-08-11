@@ -61,6 +61,26 @@
         </div>
       </section>
 
+      <section class="vault-section" aria-labelledby="vaultTitle">
+        <div class="vault-heading">
+          <div>
+            <p class="eyebrow vault-kicker">EXCLUSIVE COLLECTIONS</p>
+            <h2 id="vaultTitle">The Baked Vault</h2>
+            <p>Explore curated drops, signature ranges and customer favourites.</p>
+          </div>
+          <button id="clearVaultFilter" class="btn vault-clear hidden" type="button">View all products</button>
+        </div>
+        <div id="vaultGrid" class="vault-grid">
+          <button class="vault-card" data-vault="new" type="button"><span class="vault-icon">🔥</span><strong>New Drops</strong><small>Freshly added products</small><b id="vaultCountNew">0</b></button>
+          <button class="vault-card" data-vault="legacy" type="button"><span class="vault-icon">👑</span><strong>Legacy Strains</strong><small>Trusted Baked favourites</small><b id="vaultCountLegacy">0</b></button>
+          <button class="vault-card" data-vault="platinum" type="button"><span class="vault-icon">💎</span><strong>Platinum Collection</strong><small>Our premium range</small><b id="vaultCountPlatinum">0</b></button>
+          <button class="vault-card" data-vault="staff" type="button"><span class="vault-icon">⭐</span><strong>Staff Picks</strong><small>Hand-picked favourites</small><b id="vaultCountStaff">0</b></button>
+          <button class="vault-card" data-vault="limited" type="button"><span class="vault-icon">⏳</span><strong>Limited Edition</strong><small>Available while stocks last</small><b id="vaultCountLimited">0</b></button>
+          <button class="vault-card" data-vault="trending" type="button"><span class="vault-icon">📈</span><strong>Trending This Week</strong><small>Popular right now</small><b id="vaultCountTrending">0</b></button>
+        </div>
+        <div id="vaultActiveLabel" class="vault-active-label hidden"></div>
+      </section>
+
       <section class="toolbar">
         <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="Search products"></label>
         <select id="categoryFilter"><option value="all">All categories</option></select>
@@ -179,7 +199,7 @@
         <input id="productId" type="hidden">
         <label>Product name<input id="productName" required></label>
         <label>SKU<input id="productSku" required></label>
-        <label>Category<input id="productCategory" required placeholder="Pre-Rolls, Flower, Vapes"></label>
+        <label>Category<input id="productCategory" required placeholder="Pre-Rolls, Edibles, Vapes"></label>
         <label>Range / Group<input id="productGroup" required placeholder="Green, Silver, Platinum"></label>
         <label>Strength<input id="productStrength" placeholder="1g, 25mg, 1ml"></label>
         <label>Price (R)<input id="productPrice" type="number" min="0" step="0.01" required></label>
