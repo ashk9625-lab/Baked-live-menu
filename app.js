@@ -435,6 +435,37 @@ $('#leaveSite').onclick=()=>location.href='https://www.google.com';
 if(sessionStorage.getItem('baked-age-verified')==='yes') $('#ageGate').classList.add('hidden');
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; 
+
+/* ===== SURPRISE ME ===== */
+function openSurpriseMe(){
+  const modal=$('#surpriseModal');
+  if(!modal)return;
+  $('#surpriseResult').innerHTML='';
+  $('#surpriseBudget').value='';
+  modal.classList.remove('hidden');
+}
+function closeSurpriseMe(){if($('#surpriseModal'))$('#surpriseModal').classList.add('hidden');}
+function runSurpriseMe(){
+  const budget=Number($('#surpriseBudget')?.value||0),result=$('#surpriseResult');
+  if(!result)return;
+  if(!Number.isFinite(budget)||budget<=0){result.innerHTML='<div class="surprise-empty">Enter a budget greater than R0.</div>';return;}
+  const candidates=products.filter(p=>Number(p.stock)>0&&Number(p.price)<=budget&&p.active!==false);
+  if(!candidates.length){result.innerHTML=`<div class="surprise-empty"><strong>No match under ${money(budget)}</strong><br>Try a higher budget.</div>`;return;}
+  const pick=candidates[Math.floor(Math.random()*candidates.length)];
+  const qty=Math.max(1,Math.min(Number(pick.stock||1),Math.floor(budget/Number(pick.price||1))));
+  const img=pick.image_url?`<img src="${escapeHtml(pick.image_url)}" alt="${escapeHtml(pick.name)}">`:`<div class="surprise-placeholder">${initials(pick.name)}</div>`;
+  result.innerHTML=`<div class="surprise-pick"><div class="surprise-image">${img}</div><div class="surprise-copy">
+    <div class="surprise-label">YOUR SURPRISE PICK</div><h3>${escapeHtml(pick.name)}</h3>
+    <p>${escapeHtml(pick.description||'Available now on the live menu.')}</p>
+    <div class="surprise-meta"><span>${escapeHtml(pick.category||pick.group_name||'Product')}</span><strong>${money(pick.price)}</strong></div>
+    <div class="surprise-actions"><button class="btn primary" id="surpriseAddOne" type="button">Add 1 to cart</button>
+    ${qty>1?`<button class="btn ghost" id="surpriseAddBudget" type="button">Add ${qty} (${money(qty*Number(pick.price||0))})</button>`:''}
+    <button class="btn ghost" id="surpriseAgain" type="button">Surprise me again</button></div></div></div>`;
+  $('#surpriseAddOne').onclick=()=>addToCart(pick.id,1);
+  if($('#surpriseAddBudget'))$('#surpriseAddBudget').onclick=()=>addToCart(pick.id,qty);
+  $('#surpriseAgain').onclick=runSurpriseMe;
+}
+
 /* ===== DIGITAL MEMBERSHIP + STORE CREDIT ===== */
 const MEMBER_KEY='baked-member-profile';
 function getMember(){try{return JSON.parse(localStorage.getItem(MEMBER_KEY)||'null')}catch{return null}}
@@ -462,4 +493,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeOverlays();clo
 if($('#memberButton')) $('#memberButton').onclick=openMemberCard;
 if($('#memberClose')) $('#memberClose').onclick=closeMemberModal;
 if($('#applyCreditButton')) $('#applyCreditButton').onclick=applyMemberCreditToCart;
+if($('#surpriseButton')) $('#surpriseButton').onclick=openSurpriseMe;
+if($('#surpriseClose')) $('#surpriseClose').onclick=closeSurpriseMe;
+if($('#surpriseGo')) $('#surpriseGo').onclick=runSurpriseMe;
+if($('#surpriseModal')) $('#surpriseModal').onclick=e=>{if(e.target===$('#surpriseModal'))closeSurpriseMe();};
 loadSiteSettings().then(loadProducts);
