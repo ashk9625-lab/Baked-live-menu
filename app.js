@@ -228,6 +228,14 @@ function updateCart(){
     input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur();}};
   });
 }
+function clearCart(){
+  if(!cart.length)return;
+  if(!confirm('Clear all items from your cart?'))return;
+  cart=[];
+  localStorage.setItem('baked-cart',JSON.stringify(cart));
+  updateCart();
+  toast('Cart cleared');
+}
 function openDrawer(){ $('#cartDrawer').classList.add('open'); $('#drawerBackdrop').classList.remove('hidden'); $('#cartDrawer').setAttribute('aria-hidden','false'); }
 function closeOverlays(){ $$('.drawer').forEach(x=>x.classList.remove('open')); $$('.modal').forEach(x=>x.classList.add('hidden')); $('#drawerBackdrop').classList.add('hidden'); }
 function closeStrainModal(){
@@ -729,7 +737,7 @@ function runSurpriseMe(){
   $('#surpriseAgain').onclick=runSurpriseMe;
 }
 
-$('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
+$('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
 $('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
