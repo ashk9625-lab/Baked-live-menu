@@ -11,6 +11,7 @@ const FALLBACK_PRODUCTS = [
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
 let activeVaultFilter='all';
+let activeRangeFilter='all';
 let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
 let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -51,6 +52,43 @@ function buildFilters(){
   $$('#categoryChips .chip').forEach(b=>b.onclick=()=>{ $('#categoryFilter').value=b.dataset.category; buildFilters(); renderProducts(); });
 }
 function escapeHtml(v=''){ return String(v).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+function renderRangeBrowser(){
+  const grid=$('#rangeGrid'), title=$('#rangeBrowserTitle'), copy=$('#rangeBrowserCopy'), back=$('#backToRangesButton');
+  if(!grid)return;
+  const inStock=products.filter(p=>Number(p.stock)>0&&p.active!==false);
+  const groups=[...new Set(inStock.map(p=>String(p.group_name||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  if(activeRangeFilter!=='all'&&!groups.includes(activeRangeFilter))activeRangeFilter='all';
+  if(activeRangeFilter==='all'){
+    title.textContent='Choose a range';
+    copy.textContent='Open a range to see the strains currently in stock.';
+    back.classList.add('hidden');
+    grid.classList.remove('hidden');
+    grid.innerHTML=groups.length?groups.map(group=>{
+      const count=inStock.filter(p=>String(p.group_name||'').trim()===group).length;
+      return `<button class="range-card" type="button" data-range="${escapeHtml(group)}"><span class="range-card-label">${escapeHtml(group)}</span><strong>${count} ${count===1?'strain':'strains'} in stock</strong><span>Open range →</span></button>`;
+    }).join(''):`<div class="empty-state wide"><h3>No ranges available</h3><p>Add a Range / Group to your products to show them here.</p></div>`;
+    $$('#rangeGrid .range-card').forEach(card=>card.onclick=()=>openRange(card.dataset.range));
+  }else{
+    title.textContent=activeRangeFilter;
+    const count=inStock.filter(p=>String(p.group_name||'').trim()===activeRangeFilter).length;
+    copy.textContent=`Showing ${count} ${count===1?'strain':'strains'} currently in stock in this range.`;
+    back.classList.remove('hidden');
+    grid.classList.add('hidden');
+  }
+}
+function openRange(group){
+  activeRangeFilter=group;
+  activeVaultFilter='all';
+  $('#categoryFilter').value='all';
+  $('#stockFilter').value='all';
+  $('#searchInput').value='';
+  buildFilters(); updateVault(); renderRangeBrowser(); renderProducts();
+  $('#productGrid')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function clearRange(){
+  activeRangeFilter='all';
+  renderRangeBrowser(); renderProducts();
+}
 const LEGACY_NAMES=['baked alaska','exodus cheese','candy pavé','candy pave',"baker's delight",'bakers delight'];
 const vaultLabels={new:'New Drops',legacy:'Legacy Strains',platinum:'Platinum Collection',staff:'Staff Picks',limited:'Limited Edition',trending:'Trending This Week'};
 function isVaultProduct(p,type){
@@ -72,14 +110,14 @@ function updateVault(){
   if(activeVaultFilter==='all'){label?.classList.add('hidden');clear?.classList.add('hidden');}
   else{if(label){label.textContent=`Viewing The Baked Vault: ${vaultLabels[activeVaultFilter]}`;label.classList.remove('hidden')}clear?.classList.remove('hidden');}
 }
-function setVaultFilter(type){activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
+function setVaultFilter(type){activeRangeFilter='all';renderRangeBrowser();activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
-    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
+    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter))&&(activeRangeFilter==='all'||(String(p.group_name||'').trim()===activeRangeFilter&&Number(p.stock)>0));
   });
-  $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
+  $('#status').textContent=activeRangeFilter!=='all'?`${activeRangeFilter} · ${shown.length} in-stock ${shown.length===1?'strain':'strains'}`:(activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`);
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
@@ -92,7 +130,7 @@ async function loadProducts(){
     products=data;
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
-  updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
+  updateStats(); buildFilters(); updateVault(); renderRangeBrowser(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
@@ -485,6 +523,7 @@ $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#log
 $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
+$('#backToRangesButton')?.addEventListener('click',clearRange);
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
 $('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeOverlays();closeMemberModal();}});
