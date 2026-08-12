@@ -154,6 +154,14 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar"><div><h3>Quick Stock Update</h3><p class="admin-help">Change multiple quantities, then save them all at once.</p></div><button id="reloadQuickStockButton" class="btn ghost" type="button">Reload Stock</button></div>
+          <div class="quick-stock-controls">
+            <input id="quickStockSearch" type="search" placeholder="Search product or range...">
+            <button id="saveAllStockButton" class="btn primary" type="button">Save All Stock</button>
+          </div>
+          <p id="quickStockMessage" class="form-message"></p>
+          <div id="quickStockList" class="quick-stock-list"></div>
+          <div class="inventory-divider"></div>
           <div class="admin-toolbar"><h3>Stock History</h3><button id="refreshInventoryButton" class="btn ghost">Refresh</button></div>
           <div id="stockHistory" class="admin-list"></div>
         </section>

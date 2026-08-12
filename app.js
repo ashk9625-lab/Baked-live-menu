@@ -273,7 +273,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadQuickStock(),loadSiteSettings(true),loadAdminUsers()]); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -387,6 +387,45 @@ async function removeAdmin(id,email){
 
 async function loadInventory(){
   try{ const rows=await api('/rest/v1/stock_movements?select=*,products(name)&order=created_at.desc&limit=100',{auth:true}); $('#stockHistory').innerHTML=rows.length?rows.map(r=>`<article class="admin-row"><div class="admin-row-main"><span class="movement ${r.quantity>=0?'positive':'negative'}">${r.quantity>=0?'+':''}${r.quantity}</span><div><strong>${escapeHtml(r.products?.name||'Product')}</strong><small>${escapeHtml(r.movement_type)} · ${escapeHtml(r.reference||'No reference')}</small></div></div><time>${new Date(r.created_at).toLocaleString('en-ZA')}</time></article>`).join(''):'<div class="empty-state"><h3>No stock history yet</h3></div>'; }catch(err){$('#stockHistory').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
+}
+
+let quickStockRows=[];
+async function loadQuickStock(){
+  const box=$('#quickStockList'); if(!box)return;
+  $('#quickStockMessage').textContent='Loading stock…';
+  try{
+    quickStockRows=await api('/rest/v1/products?select=id,name,sku,group_name,category,stock,active&order=group_name.asc,name.asc',{auth:true});
+    $('#quickStockMessage').textContent='';
+    renderQuickStock();
+  }catch(err){ box.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;$('#quickStockMessage').textContent=''; }
+}
+function renderQuickStock(){
+  const box=$('#quickStockList'); if(!box)return;
+  const term=($('#quickStockSearch')?.value||'').trim().toLowerCase();
+  const rows=quickStockRows.filter(p=>!term||`${p.name} ${p.sku||''} ${p.group_name||''} ${p.category||''}`.toLowerCase().includes(term));
+  box.innerHTML=rows.length?rows.map(p=>`<article class="quick-stock-row" data-id="${p.id}" data-original="${Number(p.stock||0)}"><div class="quick-stock-info"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'Uncategorised')} · ${escapeHtml(p.sku||'No SKU')}</small></div><div class="quick-stock-qty"><span>Current: ${Number(p.stock||0)}</span><input class="quick-stock-input" data-id="${p.id}" type="number" min="0" step="1" value="${Number(p.stock||0)}" inputmode="numeric" aria-label="New stock for ${escapeHtml(p.name)}"></div></article>`).join(''):'<div class="empty-state"><h3>No products found</h3></div>';
+}
+async function saveAllQuickStock(){
+  const inputs=$$('.quick-stock-input');
+  const changes=[];
+  inputs.forEach(input=>{
+    const row=input.closest('.quick-stock-row');
+    const original=Number(row?.dataset.original||0), target=Math.max(0,Number(input.value||0)), diff=target-original;
+    if(diff!==0)changes.push({id:input.dataset.id,diff,target,input,row});
+  });
+  if(!changes.length){toast('No stock changes to save');return;}
+  const btn=$('#saveAllStockButton'); btn.disabled=true; $('#quickStockMessage').textContent=`Saving ${changes.length} stock change${changes.length===1?'':'s'}…`;
+  let saved=0;
+  try{
+    for(const c of changes){
+      await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'Quick Stock Update'})});
+      saved++; c.row.dataset.original=String(c.target);
+    }
+    toast(`${saved} stock item${saved===1?'':'s'} updated`);
+    $('#quickStockMessage').textContent=`Saved ${saved} product${saved===1?'':'s'} successfully.`;
+    await Promise.all([loadQuickStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){ $('#quickStockMessage').textContent=`Saved ${saved} before an error: ${err.message}`; toast('Some stock changes could not be saved'); }
+  finally{btn.disabled=false;}
 }
 
 function timeToMinutes(value='00:00'){const [h,m]=String(value).slice(0,5).split(':').map(Number);return (h||0)*60+(m||0)}
@@ -520,7 +559,7 @@ function runSurpriseMe(){
 }
 
 $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
-$('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
+$('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers; $('#reloadQuickStockButton').onclick=loadQuickStock; $('#saveAllStockButton').onclick=saveAllQuickStock; $('#quickStockSearch').addEventListener('input',renderQuickStock);
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 $('#backToRangesButton')?.addEventListener('click',clearRange);
