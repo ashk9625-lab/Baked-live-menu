@@ -225,7 +225,11 @@
         <label>Low-stock level<input id="productReorder" type="number" min="0" value="5" required></label>
         <label class="full">Image URL<input id="productImage" type="url" placeholder="https://..."></label>
         <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
-        <label class="full">Description<textarea id="productDescription" rows="3"></textarea></label>
+        <label class="full">Description<textarea id="productDescription" rows="3" placeholder="Optional normal product description"></textarea></label>
+        <label class="full">Strains & quantities
+          <textarea id="productStrains" rows="6" placeholder="Biscotti = 100&#10;Pink Grapefruit = 75&#10;Sour Diesel = 50"></textarea>
+          <small class="field-help">One strain per line. Use: Strain name = quantity</small>
+        </label>
         <label class="check full"><input id="productActive" type="checkbox" checked> Visible on live menu</label>
         <label class="check full"><input id="productFeatured" type="checkbox"> Feature at top of menu</label>
         <div class="modal-actions full"><button type="button" class="btn ghost" data-close="productModal">Cancel</button><button type="submit" class="btn primary">Save product</button></div>

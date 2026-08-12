@@ -74,10 +74,35 @@ function updateVault(){
 }
 function setVaultFilter(type){activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
 
-function parseStrainList(description=''){
-  const text=String(description||'').replace(/[,\n;|]+/g,' ').replace(/\s+/g,' ').trim();
-  if(!text) return [];
+function splitProductDescription(raw=''){
+  const text=String(raw||'');
+  const marker='[[STRAINS]]';
+  const at=text.indexOf(marker);
+  if(at<0)return {description:text.trim(),strainText:''};
+  return {description:text.slice(0,at).trim(),strainText:text.slice(at+marker.length).trim()};
+}
+function parseStrainLines(text=''){
   const items=[];
+  String(text||'').split(/\r?\n/).forEach(line=>{
+    line=line.trim(); if(!line)return;
+    let m=line.match(/^(.+?)\s*(?:=|:|-)\s*(\d+)\s*$/);
+    if(!m){
+      const x=line.match(/^(\d+)\s*[x×]\s*(.+?)\s*$/i);
+      if(x)m=[null,x[2],x[1]];
+    }
+    if(m){
+      const name=String(m[1]||'').trim(),qty=Number(m[2]);
+      if(name&&Number.isInteger(qty)&&qty>=0)items.push({name,qty});
+    }
+  });
+  return items;
+}
+function parseStrainList(description=''){
+  const parts=splitProductDescription(description);
+  let items=parseStrainLines(parts.strainText);
+  if(items.length)return items;
+  const text=String(parts.description||'').replace(/[,\n;|]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!text)return [];
   const re=/(\d+)\s*[x×]\s*(.+?)(?=\s+\d+\s*[x×]\s+|$)/gi;
   let m;
   while((m=re.exec(text))){
@@ -86,6 +111,15 @@ function parseStrainList(description=''){
     if(qty>=0&&name)items.push({qty,name});
   }
   return items;
+}
+function formatStrainsForAdmin(description=''){
+  return parseStrainList(description).map(s=>`${s.name} = ${s.qty}`).join('\n');
+}
+function composeProductDescription(normalDescription='',strainText=''){
+  const cleanDesc=String(normalDescription||'').trim();
+  const strains=parseStrainLines(strainText);
+  if(!strains.length)return cleanDesc;
+  return `${cleanDesc}${cleanDesc?'\n\n':''}[[STRAINS]]\n${strains.map(s=>`${s.name} = ${s.qty}`).join('\n')}`;
 }
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
@@ -107,7 +141,7 @@ function renderProducts(){
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strains=parseStrainList(p.description);
-    const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(p.description||'Current live menu item.')}</p>`;
+    const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
     return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&parseStrainList(p.description).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
@@ -322,11 +356,11 @@ async function deleteProduct(id,name,button,sku=''){
 
 function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
-  if(p){ $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=p.description||'';$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
+  if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productStrains').value=formatStrainsForAdmin(p.description);$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
-  e.preventDefault(); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:$('#productDescription').value.trim(),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
+  e.preventDefault(); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
   try{ await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)}); closeOverlays(); toast(id?'Product updated':'Product added'); await Promise.all([loadAdminProducts(),loadProducts()]); }catch(err){ $('#productFormMessage').textContent=err.message; }
 }
