@@ -308,7 +308,7 @@ async function placeOrder(e){
         p_customer_name:customerName,
         p_customer_phone:customerPhone,
         p_note:note,
-        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.quantity}))
+        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.quantity,strain:i.strain||null}))
       })
     });
 
