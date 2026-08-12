@@ -446,6 +446,55 @@ async function removeAdmin(id,email){
 }
 
 
+
+let fastStockProducts=[];
+function renderFastStock(){
+  const box=$('#fastStockList');if(!box)return;
+  const q=($('#fastStockSearch')?.value||'').trim().toLowerCase();
+  const groups=[];
+  fastStockProducts.forEach(p=>{
+    const strains=parseStrainList(p.description);
+    if(!strains.length)return;
+    const visible=strains.map((s,i)=>({s,i})).filter(x=>!q||`${p.name} ${p.sku||''} ${x.s.name}`.toLowerCase().includes(q));
+    if(!visible.length)return;
+    groups.push(`<div class="fast-stock-group"><div class="fast-stock-title"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku||'')}</small></div>
+      ${visible.map(({s,i})=>`<div class="fast-stock-row"><span>${escapeHtml(s.name)}</span><div><small>Current ${s.qty}</small><input class="fast-stock-input" data-product="${p.id}" data-index="${i}" type="number" min="0" step="1" value="${s.qty}" inputmode="numeric"></div></div>`).join('')}
+    </div>`);
+  });
+  box.innerHTML=groups.length?groups.join(''):'<div class="empty-state"><p>No strain stock found.</p></div>';
+}
+async function loadFastStock(){
+  try{
+    fastStockProducts=await api('/rest/v1/products?select=id,sku,name,description&order=name.asc',{auth:true});
+    renderFastStock();
+  }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
+}
+async function saveFastStock(){
+  const inputs=$$('.fast-stock-input');
+  const byProduct=new Map();
+  inputs.forEach(input=>{
+    const p=fastStockProducts.find(x=>String(x.id)===String(input.dataset.product));if(!p)return;
+    const strains=parseStrainList(p.description);
+    const i=Number(input.dataset.index),qty=Number(input.value);
+    if(!strains[i]||!Number.isInteger(qty)||qty<0)return;
+    strains[i].qty=qty;byProduct.set(String(p.id),{p,strains});
+  });
+  if(!byProduct.size){toast('No strain stock to save');return;}
+  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');btn.disabled=true;msg.textContent=`Saving ${byProduct.size} product${byProduct.size===1?'':'s'}…`;let saved=0;
+  try{
+    for(const {p,strains} of byProduct.values()){
+      const normal=splitProductDescription(p.description).description;
+      const strainText=strains.map(s=>`${s.name} = ${s.qty}`).join('\n');
+      const description=composeProductDescription(normal,strainText);
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
+      saved++;
+    }
+    toast('Strain stock updated');msg.textContent=`Saved ${saved} product${saved===1?'':'s'} successfully.`;
+    await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){msg.textContent=`Saved ${saved} before an error: ${err.message}`;toast('Some strain stock could not be saved');}
+  finally{btn.disabled=false;}
+}
+
 let stockCsvChanges = [];
 let stockCsvNewProducts = [];
 
@@ -640,7 +689,7 @@ function runSurpriseMe(){
 }
 
 $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
-$('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
+$('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
