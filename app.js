@@ -176,13 +176,40 @@ function renderProducts(){
   $$('.view-strains').forEach(b=>b.onclick=e=>{e.stopPropagation();openStrainModal(b.dataset.id);});
   $$('.product-card.has-strains').forEach(card=>card.onclick=()=>openStrainModal(card.dataset.strainCard));
 }
+
+function syncCartWithLiveProducts(){
+  if(!Array.isArray(cart)||!Array.isArray(products))return;
+  const before=cart.length;
+  cart=cart.filter(item=>{
+    const p=products.find(x=>String(x.id)===String(item.id));
+    if(!p)return false;
+    if(item.strain){
+      const s=parseStrainList(p.description).find(x=>String(x.name).trim().toLowerCase()===String(item.strain).trim().toLowerCase());
+      if(!s||s.qty<=0)return false;
+      item.stock=s.qty;
+      item.price=Number(p.price);
+      item.name=`${p.name} — ${s.name}`;
+      item.quantity=Math.min(Number(item.quantity||1),s.qty);
+      return item.quantity>0;
+    }
+    if(Number(p.stock||0)<=0)return false;
+    item.stock=Number(p.stock||0);
+    item.price=Number(p.price);
+    item.name=p.name;
+    item.quantity=Math.min(Number(item.quantity||1),item.stock);
+    return item.quantity>0;
+  });
+  if(cart.length!==before)toast('Cart refreshed to match current live stock');
+  persistCart();
+}
+
 async function loadProducts(){
   try{
     const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc');
     products=data;
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
-  updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
+  updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); syncCartWithLiveProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
@@ -286,6 +313,8 @@ function printInvoice(order=lastOrderForInvoice){
 
 async function placeOrder(e){
   e.preventDefault();
+  syncCartWithLiveProducts();
+  if(!cart.length){ $('#checkoutMessage').textContent='Your cart no longer contains available stock. Please add items again.'; return; }
 
   const btn=$('#placeOrderButton');
   const customerName=$('#customerName').value.trim();
