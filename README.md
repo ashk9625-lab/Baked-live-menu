@@ -26,3 +26,6 @@ After deployment, close the old browser tab and reopen the site so the new servi
 
 
 Customer range browsing: customers click a range name such as KING YELLOW directly to see only the in-stock strains in that range with live quantities.
+
+
+CSV STOCK FIX: Selecting a CSV now automatically previews/checks it and enables Update Stock when valid quantity changes are found.
