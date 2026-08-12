@@ -200,12 +200,24 @@ function changeQty(key,change){
   if(!item.quantity)cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
   persistCart();
 }
+function setCartQty(key,value){
+  const item=cart.find(x=>String(x.cartKey||x.id)===String(key)); if(!item)return;
+  let qty=Math.floor(Number(value)||0);
+  qty=Math.max(0,Math.min(Number(item.stock||0),qty));
+  if(qty<=0)cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
+  else item.quantity=qty;
+  persistCart();
+}
 function updateCart(){
   const count=cart.reduce((a,b)=>a+b.quantity,0), total=cart.reduce((a,b)=>a+b.quantity*b.price,0);
   $('#cartCount').textContent=count; $('#cartTotal').textContent=money(total);
-  $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item"><div><strong>${escapeHtml(i.name)}</strong><small>${money(i.price)} each</small></div><div class="qty"><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="-1">−</button><span>${i.quantity}</span><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="1">+</button></div></div>`).join('');
+  $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item"><div><strong>${escapeHtml(i.name)}</strong><small>${money(i.price)} each · ${i.stock} available</small></div><div class="qty"><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="-1">−</button><input class="cart-qty-input" data-id="${escapeHtml(i.cartKey||i.id)}" type="number" min="1" max="${i.stock}" value="${i.quantity}" inputmode="numeric" aria-label="Cart quantity for ${escapeHtml(i.name)}"><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="1">+</button></div></div>`).join('');
   $('#cartEmpty').classList.toggle('hidden',!!cart.length); $('#checkoutArea').classList.toggle('hidden',!cart.length);
   $$('.qty button').forEach(b=>b.onclick=()=>changeQty(b.dataset.id,Number(b.dataset.change)));
+  $$('.cart-qty-input').forEach(i=>{
+    i.onchange=()=>setCartQty(i.dataset.id,i.value);
+    i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();setCartQty(i.dataset.id,i.value);i.blur();}};
+  });
 }
 function openDrawer(){ $('#cartDrawer').classList.add('open'); $('#drawerBackdrop').classList.remove('hidden'); $('#cartDrawer').setAttribute('aria-hidden','false'); }
 function closeOverlays(){ $$('.drawer').forEach(x=>x.classList.remove('open')); $$('.modal').forEach(x=>x.classList.add('hidden')); $('#drawerBackdrop').classList.add('hidden'); }
@@ -358,13 +370,33 @@ async function deleteProduct(id,name,button,sku=''){
   button.disabled=true;
   button.textContent='Deleting…';
   try{
-    await api('/rest/v1/rpc/delete_product_admin',{
-      method:'POST',
-      auth:true,
-      body:JSON.stringify({p_product_id:id})
-    });
+    // Try the admin delete RPC first. If an older database does not have it
+    // or it refuses this record, fall back to a direct authenticated DELETE.
+    try{
+      await api('/rest/v1/rpc/delete_product_admin',{
+        method:'POST',
+        auth:true,
+        body:JSON.stringify({p_product_id:id})
+      });
+    }catch(rpcErr){
+      console.warn('Admin delete RPC failed, trying direct delete',rpcErr);
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}`,{
+        method:'DELETE',
+        auth:true,
+        headers:{Prefer:'return=minimal'}
+      });
+    }
 
-    const verify=await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}&select=id`,{auth:true});
+    let verify=await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}&select=id`,{auth:true});
+    if(Array.isArray(verify)&&verify.length){
+      // One final direct-delete attempt for stubborn/legacy records.
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}`,{
+        method:'DELETE',
+        auth:true,
+        headers:{Prefer:'return=minimal'}
+      });
+      verify=await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}&select=id`,{auth:true});
+    }
     if(Array.isArray(verify)&&verify.length){
       throw new Error('The database still contains this exact product record');
     }
