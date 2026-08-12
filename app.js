@@ -181,6 +181,13 @@ function updateCart(){
 }
 function openDrawer(){ $('#cartDrawer').classList.add('open'); $('#drawerBackdrop').classList.remove('hidden'); $('#cartDrawer').setAttribute('aria-hidden','false'); }
 function closeOverlays(){ $$('.drawer').forEach(x=>x.classList.remove('open')); $$('.modal').forEach(x=>x.classList.add('hidden')); $('#drawerBackdrop').classList.add('hidden'); }
+function closeStrainModal(){
+  const modal=$('#strainModal');
+  if(modal)modal.classList.add('hidden');
+  const backdrop=$('#drawerBackdrop');
+  if(backdrop && !document.querySelector('.drawer.open'))backdrop.classList.add('hidden');
+}
+
 const WHATSAPP_ORDER_NUMBER = '27678454691';
 
 function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
@@ -616,3 +623,10 @@ if($('#surpriseClose')) $('#surpriseClose').onclick=closeSurpriseMe;
 if($('#surpriseGo')) $('#surpriseGo').onclick=runSurpriseMe;
 if($('#surpriseModal')) $('#surpriseModal').onclick=e=>{if(e.target===$('#surpriseModal'))closeSurpriseMe();};
 loadSiteSettings().then(loadProducts);
+// Robust strain popup closing
+document.addEventListener('click',e=>{
+  if(e.target.closest('#strainModal [data-close]')){e.preventDefault();e.stopPropagation();closeStrainModal();return;}
+  const modal=e.target.closest('#strainModal');
+  if(modal && e.target===modal)closeStrainModal();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#strainModal')?.classList.contains('hidden'))closeStrainModal();});
