@@ -82,14 +82,6 @@
         <div id="vaultActiveLabel" class="vault-active-label hidden"></div>
       </section>
 
-      <section id="rangeBrowser" class="range-browser">
-        <div id="rangeBrowserHead" class="range-browser-head hidden">
-          <div><h2 id="rangeBrowserTitle"></h2><p id="rangeBrowserCopy"></p></div>
-          <button id="backToRangesButton" class="btn ghost hidden" type="button">← Back to all ranges</button>
-        </div>
-        <div id="rangeGrid" class="range-grid"></div>
-      </section>
-
       <section class="toolbar">
         <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="Search products"></label>
         <select id="categoryFilter"><option value="all">All categories</option></select>
@@ -154,21 +146,23 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar"><div><h3>Quick Stock Update</h3><p class="admin-help">Change multiple quantities, then save them all at once.</p></div><button id="reloadQuickStockButton" class="btn ghost" type="button">Reload Stock</button></div>
-          <div class="quick-stock-controls">
-            <input id="quickStockSearch" type="search" placeholder="Search product or range...">
-            <button id="saveAllStockButton" class="btn primary" type="button">Save All Stock</button>
+          <div class="csv-stock-card">
+            <div class="admin-toolbar">
+              <div>
+                <h3>CSV Stock Upload</h3>
+                <p class="admin-help">Download the template, change the stock quantities in Excel, save as CSV, then upload it here.</p>
+              </div>
+              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download CSV Template</button>
+            </div>
+            <div class="csv-stock-controls">
+              <input id="stockCsvFile" type="file" accept=".csv,text/csv">
+              <button id="previewStockCsvButton" class="btn ghost" type="button">Preview CSV</button>
+              <button id="applyStockCsvButton" class="btn primary" type="button" disabled>UPDATE STOCK</button>
+            </div>
+            <p id="stockCsvMessage" class="form-message"></p>
+            <div id="stockCsvPreview" class="csv-preview"></div>
           </div>
-          <p id="quickStockMessage" class="form-message"></p>
-          <div id="quickStockList" class="quick-stock-list"></div>
-          <div class="bulk-add-card">
-  <div class="admin-toolbar"><div><h3>Bulk Add Stock</h3><p class="admin-help">Enter only the quantities received. Leave products blank if no stock was received.</p></div><button id="bulkAddClearButton" class="btn ghost" type="button">Clear</button></div>
-  <div class="quick-stock-search"><input id="bulkAddSearch" type="search" placeholder="Search strain, SKU or range…"></div>
-  <div id="bulkAddRows" class="quick-stock-list"></div>
-  <div class="quick-stock-footer"><span id="bulkAddMessage" class="form-message"></span><button id="bulkAddSaveButton" class="btn primary" type="button">ADD ALL STOCK</button></div>
-</div>
-<div class="inventory-divider"></div>
-<div class="bulk-stock-card"><div class="admin-toolbar"><div><h3>Excel / CSV Bulk Stock</h3><p class="admin-help">Choose your CSV and it will check automatically. When the quantities are ready, click Update Stock.</p></div><button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Template</button></div><div class="bulk-stock-controls"><input id="stockCsvFile" type="file" accept=".csv,text/csv"><button id="previewStockCsvButton" class="btn ghost" type="button">Check File</button><button id="applyStockCsvButton" class="btn primary" type="button" disabled>Update Stock</button></div><p id="stockCsvMessage" class="form-message"></p><div id="stockCsvPreview" class="csv-preview"></div></div><div class="inventory-divider"></div>
+          <div class="inventory-divider"></div>
           <div class="admin-toolbar"><h3>Stock History</h3><button id="refreshInventoryButton" class="btn ghost">Refresh</button></div>
           <div id="stockHistory" class="admin-list"></div>
         </section>

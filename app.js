@@ -11,7 +11,6 @@ const FALLBACK_PRODUCTS = [
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
 let activeVaultFilter='all';
-let activeRangeFilter='all';
 let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
 let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -52,61 +51,6 @@ function buildFilters(){
   $$('#categoryChips .chip').forEach(b=>b.onclick=()=>{ $('#categoryFilter').value=b.dataset.category; buildFilters(); renderProducts(); });
 }
 function escapeHtml(v=''){ return String(v).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
-function productFamily(p){
-  const name=String(p.name||'').trim();
-  const upper=name.toUpperCase();
-  let m=upper.match(/^(TP\s+KING\s+[A-Z0-9-]+)(?:\s+|$)/);
-  if(m)return m[1];
-  m=upper.match(/^(MINI\s+[A-Z0-9-]+)(?:\s+|$)/);
-  if(m)return m[1];
-  m=upper.match(/^(KING\s+[A-Z0-9-]+)(?:\s+|$)/);
-  if(m)return m[1];
-  return String(p.group_name||p.category||'OTHER').trim().toUpperCase();
-}
-function strainDisplayName(p){
-  const fam=productFamily(p), name=String(p.name||'').trim();
-  if(name.toUpperCase().startsWith(fam+' ')) return name.slice(fam.length).trim() || name;
-  return name;
-}
-function renderRangeBrowser(){
-  const grid=$('#rangeGrid'), title=$('#rangeBrowserTitle'), copy=$('#rangeBrowserCopy'), back=$('#backToRangesButton'), head=$('#rangeBrowserHead');
-  if(!grid)return;
-  const inStock=products.filter(p=>Number(p.stock)>0&&p.active!==false);
-  const groups=[...new Set(inStock.map(productFamily).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  if(activeRangeFilter!=='all'&&!groups.includes(activeRangeFilter))activeRangeFilter='all';
-  const toolbar=document.querySelector('.toolbar'), chips=$('#categoryChips'), status=$('#status'), productsGrid=$('#productGrid'), featured=$('#featuredSection');
-  if(activeRangeFilter==='all'){
-    if(head)head.classList.add('hidden');
-    if(title)title.textContent=''; if(copy)copy.textContent=''; if(back)back.classList.add('hidden');
-    grid.classList.remove('hidden');
-    if(toolbar)toolbar.classList.add('hidden'); if(chips)chips.classList.add('hidden'); if(status)status.classList.add('hidden'); if(productsGrid)productsGrid.classList.add('hidden'); if(featured)featured.classList.add('hidden');
-    grid.innerHTML=groups.length?groups.map(group=>{
-      const count=inStock.filter(p=>productFamily(p)===group).length;
-      return `<button class="range-card simple-family-card" type="button" data-range="${escapeHtml(group)}"><span class="range-card-label">${escapeHtml(group)}</span><small>${count} ${count===1?'strain':'strains'} available</small></button>`;
-    }).join(''):`<div class="empty-state wide"><h3>No products available</h3><p>Add products to your live menu to show them here.</p></div>`;
-    $$('#rangeGrid .range-card').forEach(card=>card.onclick=()=>openRange(card.dataset.range));
-  }else{
-    if(head)head.classList.remove('hidden');
-    if(title)title.textContent=activeRangeFilter;
-    const count=inStock.filter(p=>productFamily(p)===activeRangeFilter).length;
-    if(copy)copy.textContent=`Choose from ${count} ${count===1?'strain':'strains'} currently in stock.`;
-    if(back)back.classList.remove('hidden');
-    grid.classList.add('hidden');
-    if(toolbar)toolbar.classList.add('hidden'); if(chips)chips.classList.add('hidden'); if(status)status.classList.remove('hidden'); if(productsGrid)productsGrid.classList.remove('hidden'); if(featured)featured.classList.add('hidden');
-  }
-}
-function openRange(group){
-  activeRangeFilter=group;
-  activeVaultFilter='all';
-  $('#categoryFilter').value='all'; $('#stockFilter').value='all'; $('#searchInput').value='';
-  buildFilters(); updateVault(); renderRangeBrowser(); renderProducts();
-  $('#rangeBrowser')?.scrollIntoView({behavior:'smooth',block:'start'});
-}
-function clearRange(){
-  activeRangeFilter='all';
-  renderRangeBrowser(); renderProducts();
-  $('#rangeBrowser')?.scrollIntoView({behavior:'smooth',block:'start'});
-}
 const LEGACY_NAMES=['baked alaska','exodus cheese','candy pavé','candy pave',"baker's delight",'bakers delight'];
 const vaultLabels={new:'New Drops',legacy:'Legacy Strains',platinum:'Platinum Collection',staff:'Staff Picks',limited:'Limited Edition',trending:'Trending This Week'};
 function isVaultProduct(p,type){
@@ -128,17 +72,17 @@ function updateVault(){
   if(activeVaultFilter==='all'){label?.classList.add('hidden');clear?.classList.add('hidden');}
   else{if(label){label.textContent=`Viewing The Baked Vault: ${vaultLabels[activeVaultFilter]}`;label.classList.remove('hidden')}clear?.classList.remove('hidden');}
 }
-function setVaultFilter(type){activeRangeFilter='all';renderRangeBrowser();activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
+function setVaultFilter(type){activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
-    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter))&&(activeRangeFilter==='all'||(productFamily(p)===activeRangeFilter&&Number(p.stock)>0));
+    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
   });
-  $('#status').textContent=activeRangeFilter!=='all'?`${activeRangeFilter} · ${shown.length} in-stock ${shown.length===1?'strain':'strains'}`:(activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`);
+  $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
-    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(activeRangeFilter!=='all'?strainDisplayName(p):p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
+    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=()=>{ const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1)); });
 }
@@ -148,7 +92,7 @@ async function loadProducts(){
     products=data;
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
-  updateStats(); buildFilters(); updateVault(); renderRangeBrowser(); renderProducts(); renderFeaturedProducts(); updateCart();
+  updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
@@ -291,7 +235,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadQuickStock(),loadSiteSettings(true),loadAdminUsers()]); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -403,90 +347,112 @@ async function removeAdmin(id,email){
   try{await api('/rest/v1/rpc/remove_admin_user',{method:'POST',auth:true,body:JSON.stringify({p_user_id:id})});toast('Admin access removed');await loadAdminUsers();}catch(err){toast(err.message);}
 }
 
+
+let stockCsvChanges = [];
+
+function csvEscape(v){
+  v=String(v??'');
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
+}
+
+async function downloadStockCsvTemplate(){
+  try{
+    const rows=await api('/rest/v1/products?select=sku,name,group_name,stock&order=group_name.asc,name.asc',{auth:true});
+    const data=[['SKU','Product','Range','New Stock Quantity'],...rows.map(p=>[p.sku||'',p.name||'',p.group_name||'',Number(p.stock||0)])];
+    const csv=data.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='BAKED-STOCK-UPLOAD-TEMPLATE.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }catch(err){ toast(err.message); }
+}
+
+function parseCsv(text){
+  const rows=[]; let row=[],cell='',quoted=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch==='"'){
+      if(quoted && text[i+1]==='"'){cell+='"';i++;} else quoted=!quoted;
+    } else if(ch===',' && !quoted){row.push(cell.trim());cell='';}
+    else if((ch==='\n'||ch==='\r') && !quoted){
+      if(ch==='\r'&&text[i+1]==='\n')i++;
+      row.push(cell.trim());
+      if(row.some(x=>x!==''))rows.push(row);
+      row=[];cell='';
+    } else cell+=ch;
+  }
+  row.push(cell.trim()); if(row.some(x=>x!==''))rows.push(row);
+  return rows;
+}
+
+async function previewStockCsv(){
+  const file=$('#stockCsvFile')?.files?.[0];
+  if(!file){ toast('Choose a CSV file first'); return; }
+  const msg=$('#stockCsvMessage'), box=$('#stockCsvPreview'), btn=$('#applyStockCsvButton');
+  msg.textContent='Checking CSV…'; box.innerHTML=''; btn.disabled=true; stockCsvChanges=[];
+  try{
+    const rows=parseCsv(await file.text());
+    if(rows.length<2) throw new Error('CSV has no stock rows.');
+    const headers=rows[0].map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));
+    const skuI=headers.indexOf('sku');
+    const qtyI=headers.findIndex(h=>['newstockquantity','stock','quantity','qty'].includes(h));
+    if(skuI<0||qtyI<0) throw new Error('CSV must contain SKU and New Stock Quantity columns.');
+
+    const products=await api('/rest/v1/products?select=id,sku,name,stock&order=name.asc',{auth:true});
+    const bySku=new Map(products.filter(p=>p.sku).map(p=>[String(p.sku).trim().toLowerCase(),p]));
+    const preview=[];
+
+    for(const r of rows.slice(1)){
+      const sku=String(r[skuI]||'').trim();
+      const raw=String(r[qtyI]||'').trim();
+      if(!sku && !raw) continue;
+      const p=bySku.get(sku.toLowerCase());
+      const target=Number(raw);
+      if(!p){ preview.push({sku,name:'Not found',current:'—',target:raw,status:'SKU not found'}); continue; }
+      if(!Number.isInteger(target)||target<0){ preview.push({sku,name:p.name,current:p.stock,target:raw,status:'Invalid quantity'}); continue; }
+      const diff=target-Number(p.stock||0);
+      preview.push({sku,name:p.name,current:Number(p.stock||0),target,status:diff===0?'No change':'Ready'});
+      if(diff!==0) stockCsvChanges.push({id:p.id,sku,name:p.name,diff});
+    }
+
+    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>SKU</span><span>Product</span><span>Current</span><span>New</span><span>Status</span></div>${preview.map(x=>`<div class="csv-line"><span>${escapeHtml(x.sku)}</span><span>${escapeHtml(x.name)}</span><span>${escapeHtml(x.current)}</span><span>${escapeHtml(x.target)}</span><span>${escapeHtml(x.status)}</span></div>`).join('')}</div>`:'<div class="empty-state"><p>No stock rows found.</p></div>';
+
+    if(stockCsvChanges.length){
+      msg.textContent=`${stockCsvChanges.length} stock change${stockCsvChanges.length===1?'':'s'} ready.`;
+      btn.disabled=false;
+    }else{
+      msg.textContent='No stock changes found. Change at least one New Stock Quantity in the CSV.';
+    }
+  }catch(err){ msg.textContent=err.message; box.innerHTML=''; btn.disabled=true; }
+}
+
+async function applyStockCsv(){
+  if(!stockCsvChanges.length) return;
+  const btn=$('#applyStockCsvButton'), msg=$('#stockCsvMessage');
+  btn.disabled=true; msg.textContent=`Updating ${stockCsvChanges.length} products…`;
+  let saved=0;
+  try{
+    for(const c of stockCsvChanges){
+      await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'CSV Stock Upload'})});
+      saved++;
+    }
+    toast(`${saved} stock items updated`);
+    msg.textContent=`Updated ${saved} products successfully.`;
+    stockCsvChanges=[];
+    $('#stockCsvPreview').innerHTML='';
+    $('#stockCsvFile').value='';
+    await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){
+    msg.textContent=`Updated ${saved} before an error: ${err.message}`;
+    toast('Some stock changes could not be saved');
+  }finally{ btn.disabled=!stockCsvChanges.length; }
+}
+
 async function loadInventory(){
   try{ const rows=await api('/rest/v1/stock_movements?select=*,products(name)&order=created_at.desc&limit=100',{auth:true}); $('#stockHistory').innerHTML=rows.length?rows.map(r=>`<article class="admin-row"><div class="admin-row-main"><span class="movement ${r.quantity>=0?'positive':'negative'}">${r.quantity>=0?'+':''}${r.quantity}</span><div><strong>${escapeHtml(r.products?.name||'Product')}</strong><small>${escapeHtml(r.movement_type)} · ${escapeHtml(r.reference||'No reference')}</small></div></div><time>${new Date(r.created_at).toLocaleString('en-ZA')}</time></article>`).join(''):'<div class="empty-state"><h3>No stock history yet</h3></div>'; }catch(err){$('#stockHistory').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
-
-let quickStockRows=[];
-async function loadQuickStock(){
-  const box=$('#quickStockList'); if(!box)return;
-  $('#quickStockMessage').textContent='Loading stock…';
-  try{
-    quickStockRows=await api('/rest/v1/products?select=id,name,sku,group_name,category,stock,active&order=group_name.asc,name.asc',{auth:true});
-    $('#quickStockMessage').textContent='';
-    renderQuickStock();
-  }catch(err){ box.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;$('#quickStockMessage').textContent=''; }
-}
-function renderQuickStock(){
-  const box=$('#quickStockList'); if(!box)return;
-  const term=($('#quickStockSearch')?.value||'').trim().toLowerCase();
-  const rows=quickStockRows.filter(p=>!term||`${p.name} ${p.sku||''} ${p.group_name||''} ${p.category||''}`.toLowerCase().includes(term));
-  box.innerHTML=rows.length?rows.map(p=>`<article class="quick-stock-row" data-id="${p.id}" data-original="${Number(p.stock||0)}"><div class="quick-stock-info"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'Uncategorised')} · ${escapeHtml(p.sku||'No SKU')}</small></div><div class="quick-stock-qty"><span>Current: ${Number(p.stock||0)}</span><input class="quick-stock-input" data-id="${p.id}" type="number" min="0" step="1" value="${Number(p.stock||0)}" inputmode="numeric" aria-label="New stock for ${escapeHtml(p.name)}"></div></article>`).join(''):'<div class="empty-state"><h3>No products found</h3></div>';
-}
-async function saveAllQuickStock(){
-  const inputs=$$('.quick-stock-input');
-  const changes=[];
-  inputs.forEach(input=>{
-    const row=input.closest('.quick-stock-row');
-    const original=Number(row?.dataset.original||0), target=Math.max(0,Number(input.value||0)), diff=target-original;
-    if(diff!==0)changes.push({id:input.dataset.id,diff,target,input,row});
-  });
-  if(!changes.length){toast('No stock changes to save');return;}
-  const btn=$('#saveAllStockButton'); btn.disabled=true; $('#quickStockMessage').textContent=`Saving ${changes.length} stock change${changes.length===1?'':'s'}…`;
-  let saved=0;
-  try{
-    for(const c of changes){
-      await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'Quick Stock Update'})});
-      saved++; c.row.dataset.original=String(c.target);
-    }
-    toast(`${saved} stock item${saved===1?'':'s'} updated`);
-    $('#quickStockMessage').textContent=`Saved ${saved} product${saved===1?'':'s'} successfully.`;
-    await Promise.all([loadQuickStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
-  }catch(err){ $('#quickStockMessage').textContent=`Saved ${saved} before an error: ${err.message}`; toast('Some stock changes could not be saved'); }
-  finally{btn.disabled=false;}
-}
-
-
-let bulkAddRows=[];
-function renderBulkAdd(){
-  const box=$('#bulkAddRows'); if(!box)return;
-  const q=($('#bulkAddSearch')?.value||'').trim().toLowerCase();
-  const rows=bulkAddRows.filter(p=>!q||[p.name,p.sku,p.group_name,p.category].some(v=>String(v||'').toLowerCase().includes(q)));
-  box.innerHTML=rows.length?rows.map(p=>`<div class="quick-stock-row">
-    <div class="quick-stock-product"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'')} · ${escapeHtml(p.sku||'No SKU')} · Current: ${Number(p.stock||0)}</small></div>
-    <div class="bulk-add-input"><span>+</span><input class="bulk-add-qty" data-id="${p.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
-  </div>`).join(''):'<div class="empty-state"><p>No products found.</p></div>';
-}
-async function loadBulkAdd(){
-  try{
-    bulkAddRows=await api('/rest/v1/products?select=id,sku,name,group_name,category,stock&order=group_name.asc,name.asc',{auth:true});
-    renderBulkAdd();
-  }catch(err){const b=$('#bulkAddRows');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
-}
-function clearBulkAdd(){ $$('.bulk-add-qty').forEach(i=>i.value=''); const m=$('#bulkAddMessage');if(m)m.textContent=''; }
-async function saveBulkAdd(){
-  const changes=$$('.bulk-add-qty').map(i=>({id:i.dataset.id,qty:Number(i.value||0)})).filter(x=>Number.isInteger(x.qty)&&x.qty>0);
-  if(!changes.length){toast('Enter stock received for at least one product');return;}
-  const btn=$('#bulkAddSaveButton');btn.disabled=true;$('#bulkAddMessage').textContent=`Adding stock to ${changes.length} product${changes.length===1?'':'s'}…`;
-  let saved=0;
-  try{
-    for(const c of changes){
-      await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.qty,p_reference:'Bulk Add Stock'})});
-      saved++;
-    }
-    toast(`${saved} stock items added`);
-    $('#bulkAddMessage').textContent=`Added stock to ${saved} product${saved===1?'':'s'} successfully.`;
-    await Promise.all([loadBulkAdd(),loadQuickStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
-  }catch(err){$('#bulkAddMessage').textContent=`Added ${saved} before an error: ${err.message}`;toast('Some stock could not be added');}
-  finally{btn.disabled=false;}
-}
-
-let stockCsvChanges=[];
-function csvEscape(v){v=String(v??'');return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;}
-function downloadStockCsvTemplate(){const rows=[['SKU','Product','Range','New Stock Quantity'],...quickStockRows.map(p=>[p.sku||'',p.name||'',p.group_name||p.category||'',Number(p.stock||0)])];const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BAKED-STOCK-UPLOAD-TEMPLATE.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-function parseCsv(text){const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(ch===','&&!quoted){row.push(cell.trim());cell='';}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);row=[];cell='';}else cell+=ch;}row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);return rows;}
-async function previewStockCsv(){const file=$('#stockCsvFile')?.files?.[0];if(!file){toast('Choose a CSV file first');return;}const msg=$('#stockCsvMessage'),box=$('#stockCsvPreview');msg.textContent='Reading CSV…';stockCsvChanges=[];$('#applyStockCsvButton').disabled=true;try{const rows=parseCsv(await file.text());if(rows.length<2)throw new Error('CSV has no stock rows.');const headers=rows[0].map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));const skuI=headers.indexOf('sku'),qtyI=headers.findIndex(h=>['newstockquantity','stock','quantity','qty'].includes(h));if(skuI<0||qtyI<0)throw new Error('CSV needs SKU and New Stock Quantity columns.');const bySku=new Map(quickStockRows.filter(p=>p.sku).map(p=>[String(p.sku).trim().toLowerCase(),p]));const preview=[];for(const r of rows.slice(1)){const sku=String(r[skuI]||'').trim(),raw=String(r[qtyI]||'').trim();if(!sku&&!raw)continue;const prod=bySku.get(sku.toLowerCase()),target=Number(raw);if(!prod){preview.push({sku,name:'Not found',current:'—',target:raw,status:'SKU not found'});continue;}if(!Number.isFinite(target)||target<0||!Number.isInteger(target)){preview.push({sku,name:prod.name,current:prod.stock,target:raw,status:'Invalid quantity'});continue;}const diff=target-Number(prod.stock||0);preview.push({sku,name:prod.name,current:Number(prod.stock||0),target,status:diff===0?'No change':'Ready'});if(diff!==0)stockCsvChanges.push({id:prod.id,sku,name:prod.name,target,diff});}box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>SKU</span><span>Product</span><span>Current</span><span>New</span><span>Status</span></div>${preview.map(x=>`<div class="csv-line"><span>${escapeHtml(x.sku)}</span><span>${escapeHtml(x.name)}</span><span>${escapeHtml(x.current)}</span><span>${escapeHtml(x.target)}</span><span>${escapeHtml(x.status)}</span></div>`).join('')}</div>`:'<div class="empty-state"><p>No rows found.</p></div>';msg.textContent=stockCsvChanges.length?`${stockCsvChanges.length} stock change${stockCsvChanges.length===1?'':'s'} ready. Click UPDATE STOCK.`:'No stock changes found. Change the New Stock Quantity values in the CSV, save it, then choose the file again.';$('#applyStockCsvButton').disabled=!stockCsvChanges.length;}catch(err){msg.textContent=err.message;box.innerHTML='';}}
-async function applyStockCsv(){if(!stockCsvChanges.length)return;const btn=$('#applyStockCsvButton');btn.disabled=true;$('#stockCsvMessage').textContent=`Updating ${stockCsvChanges.length} products…`;let saved=0;try{for(const c of stockCsvChanges){await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'CSV Bulk Stock Upload'})});saved++;}toast(`${saved} stock items updated`);$('#stockCsvMessage').textContent=`Updated ${saved} products successfully.`;stockCsvChanges=[];$('#stockCsvPreview').innerHTML='';$('#stockCsvFile').value='';await Promise.all([loadQuickStock(),loadAdminProducts(),loadInventory(),loadProducts()]);}catch(err){$('#stockCsvMessage').textContent=`Updated ${saved} before an error: ${err.message}`;toast('Some CSV stock changes could not be saved');}finally{btn.disabled=!stockCsvChanges.length;}}
 
 function timeToMinutes(value='00:00'){const [h,m]=String(value).slice(0,5).split(':').map(Number);return (h||0)*60+(m||0)}
 function orderingAllowed(){
@@ -619,10 +585,9 @@ function runSurpriseMe(){
 }
 
 $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
-$('#bulkAddSearch').oninput=renderBulkAdd; $('#bulkAddClearButton').onclick=clearBulkAdd; $('#bulkAddSaveButton').onclick=saveBulkAdd; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').addEventListener('change',()=>{ previewStockCsv(); }); $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers; $('#reloadQuickStockButton').onclick=loadQuickStock; $('#saveAllStockButton').onclick=saveAllQuickStock; $('#quickStockSearch').addEventListener('input',renderQuickStock);
+$('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
-$('#backToRangesButton')?.addEventListener('click',clearRange);
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
 $('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeOverlays();closeMemberModal();}});
