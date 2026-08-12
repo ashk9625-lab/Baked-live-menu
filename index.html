@@ -265,5 +265,12 @@
 <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span></footer>
   <script src="app.js"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));}</script>
+
+  <div id="strainModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="strainModalTitle">
+    <div class="modal-card strain-modal-card">
+      <div class="modal-head"><div><h2 id="strainModalTitle">Strains</h2><p id="strainModalSubtitle" class="muted"></p></div><button type="button" class="icon-button" data-close aria-label="Close">×</button></div>
+      <div id="strainModalList" class="strain-list"></div>
+    </div>
+  </div>
 </body>
 </html>

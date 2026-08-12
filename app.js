@@ -73,6 +73,30 @@ function updateVault(){
   else{if(label){label.textContent=`Viewing The Baked Vault: ${vaultLabels[activeVaultFilter]}`;label.classList.remove('hidden')}clear?.classList.remove('hidden');}
 }
 function setVaultFilter(type){activeVaultFilter=type;$('#categoryFilter').value='all';$('#stockFilter').value='all';$('#searchInput').value='';buildFilters();updateVault();renderProducts();document.querySelector('.toolbar')?.scrollIntoView({behavior:'smooth',block:'start'});}
+
+function parseStrainList(description=''){
+  const text=String(description||'').replace(/[,\n;|]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!text) return [];
+  const items=[];
+  const re=/(\d+)\s*[x×]\s*(.+?)(?=\s+\d+\s*[x×]\s+|$)/gi;
+  let m;
+  while((m=re.exec(text))){
+    const qty=Number(m[1]);
+    const name=String(m[2]||'').trim().replace(/[.,;:-]+$/,'');
+    if(qty>=0&&name)items.push({qty,name});
+  }
+  return items;
+}
+function openStrainModal(id){
+  const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
+  const strains=parseStrainList(p.description);
+  if(!strains.length)return;
+  $('#strainModalTitle').textContent=p.name;
+  $('#strainModalSubtitle').textContent=`${strains.length} strain${strains.length===1?'':'s'} currently listed`;
+  $('#strainModalList').innerHTML=strains.map(s=>`<div class="strain-row"><div><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(p.name)}</small></div><span class="strain-qty">${s.qty} available</span></div>`).join('');
+  $('#strainModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden');
+}
+
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
@@ -82,9 +106,14 @@ function renderProducts(){
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
-    return `<article class="product-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.description||'Current live menu item.')}</p><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
+    const strains=parseStrainList(p.description);
+    const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(p.description||'Current live menu item.')}</p>`;
+    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
-  $$('.add-button').forEach(b=>b.onclick=()=>{ const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1)); });
+  $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
+  $$('.product-quantity').forEach(i=>i.onclick=e=>e.stopPropagation());
+  $$('.view-strains').forEach(b=>b.onclick=e=>{e.stopPropagation();openStrainModal(b.dataset.id);});
+  $$('.product-card.has-strains').forEach(card=>card.onclick=()=>openStrainModal(card.dataset.strainCard));
 }
 async function loadProducts(){
   try{
