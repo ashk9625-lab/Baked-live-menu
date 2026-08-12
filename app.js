@@ -126,9 +126,36 @@ function openStrainModal(id){
   const strains=parseStrainList(p.description);
   if(!strains.length)return;
   $('#strainModalTitle').textContent=p.name;
-  $('#strainModalSubtitle').textContent=`${strains.length} strain${strains.length===1?'':'s'} currently listed`;
-  $('#strainModalList').innerHTML=strains.map(s=>`<div class="strain-row"><div><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(p.name)}</small></div><span class="strain-qty">${s.qty} available</span></div>`).join('');
-  $('#strainModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden');
+  $('#strainModalSubtitle').textContent='Choose a strain and quantity';
+  $('#strainModalList').innerHTML=strains.map((s,i)=>`<div class="strain-row selectable-strain">
+    <div class="strain-info">
+      <strong>${escapeHtml(s.name)}</strong>
+      <small>${s.qty} available · ${money(p.price)} each</small>
+    </div>
+    <div class="strain-order">
+      <input class="strain-order-qty" data-index="${i}" type="number" min="1" max="${s.qty}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(s.name)}">
+      <button type="button" class="btn primary strain-add" data-id="${p.id}" data-index="${i}" ${s.qty<=0?'disabled':''}>${s.qty<=0?'Out of stock':'Add to cart'}</button>
+    </div>
+  </div>`).join('');
+  $$('.strain-add').forEach(b=>b.onclick=()=>{
+    const strain=strains[Number(b.dataset.index)];
+    const input=$(`.strain-order-qty[data-index="${b.dataset.index}"]`);
+    addStrainToCart(p,strain,Number(input?.value||1));
+  });
+  $('#strainModal').classList.remove('hidden');
+  $('#drawerBackdrop').classList.remove('hidden');
+}
+function addStrainToCart(p,strain,requestedQuantity=1){
+  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
+  if(amount>strain.qty)return toast(`Only ${strain.qty} ${strain.name} available`);
+  const key=`${p.id}::${strain.name}`;
+  const item=cart.find(x=>String(x.cartKey||x.id)===key);
+  const existing=item?item.quantity:0;
+  if(existing+amount>strain.qty)return toast(`Only ${Math.max(0,strain.qty-existing)} more ${strain.name} available`);
+  if(item)item.quantity+=amount;
+  else cart.push({id:p.id,cartKey:key,name:`${p.name} — ${strain.name}`,parentName:p.name,strain:strain.name,price:Number(p.price),quantity:amount,stock:strain.qty});
+  persistCart();
+  toast(`${amount} × ${strain.name} added to cart`);
 }
 
 function renderProducts(){
@@ -167,15 +194,16 @@ function addToCart(id,requestedQuantity=1){
   else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
   persistCart(); toast(`${amount} × ${p.name} added to cart`);
 }
-function changeQty(id,change){
-  const item=cart.find(x=>x.id===id); if(!item)return;
+function changeQty(key,change){
+  const item=cart.find(x=>String(x.cartKey||x.id)===String(key)); if(!item)return;
   item.quantity=Math.max(0,Math.min(item.stock,item.quantity+change));
-  if(!item.quantity)cart=cart.filter(x=>x.id!==id); persistCart();
+  if(!item.quantity)cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
+  persistCart();
 }
 function updateCart(){
   const count=cart.reduce((a,b)=>a+b.quantity,0), total=cart.reduce((a,b)=>a+b.quantity*b.price,0);
   $('#cartCount').textContent=count; $('#cartTotal').textContent=money(total);
-  $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item"><div><strong>${escapeHtml(i.name)}</strong><small>${money(i.price)} each</small></div><div class="qty"><button data-id="${i.id}" data-change="-1">−</button><span>${i.quantity}</span><button data-id="${i.id}" data-change="1">+</button></div></div>`).join('');
+  $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item"><div><strong>${escapeHtml(i.name)}</strong><small>${money(i.price)} each</small></div><div class="qty"><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="-1">−</button><span>${i.quantity}</span><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="1">+</button></div></div>`).join('');
   $('#cartEmpty').classList.toggle('hidden',!!cart.length); $('#checkoutArea').classList.toggle('hidden',!cart.length);
   $$('.qty button').forEach(b=>b.onclick=()=>changeQty(b.dataset.id,Number(b.dataset.change)));
 }
