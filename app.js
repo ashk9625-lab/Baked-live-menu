@@ -53,22 +53,24 @@ function buildFilters(){
 }
 function escapeHtml(v=''){ return String(v).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
 function renderRangeBrowser(){
-  const grid=$('#rangeGrid'), title=$('#rangeBrowserTitle'), copy=$('#rangeBrowserCopy'), back=$('#backToRangesButton');
+  const grid=$('#rangeGrid'), title=$('#rangeBrowserTitle'), copy=$('#rangeBrowserCopy'), back=$('#backToRangesButton'), head=$('#rangeBrowserHead');
   if(!grid)return;
   const inStock=products.filter(p=>Number(p.stock)>0&&p.active!==false);
   const groups=[...new Set(inStock.map(p=>String(p.group_name||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   if(activeRangeFilter!=='all'&&!groups.includes(activeRangeFilter))activeRangeFilter='all';
   if(activeRangeFilter==='all'){
-    title.textContent='Choose a range';
-    copy.textContent='Open a range to see the strains currently in stock.';
+    if(head)head.classList.add('hidden');
+    title.textContent='';
+    copy.textContent='';
     back.classList.add('hidden');
     grid.classList.remove('hidden');
     grid.innerHTML=groups.length?groups.map(group=>{
       const count=inStock.filter(p=>String(p.group_name||'').trim()===group).length;
-      return `<button class="range-card" type="button" data-range="${escapeHtml(group)}"><span class="range-card-label">${escapeHtml(group)}</span><strong>${count} ${count===1?'strain':'strains'} in stock</strong><span>Open range →</span></button>`;
+      return `<button class="range-card" type="button" data-range="${escapeHtml(group)}"><span class="range-card-label">${escapeHtml(group)}</span><strong>${count} ${count===1?'strain':'strains'} available</strong></button>`;
     }).join(''):`<div class="empty-state wide"><h3>No ranges available</h3><p>Add a Range / Group to your products to show them here.</p></div>`;
     $$('#rangeGrid .range-card').forEach(card=>card.onclick=()=>openRange(card.dataset.range));
   }else{
+    if(head)head.classList.remove('hidden');
     title.textContent=activeRangeFilter;
     const count=inStock.filter(p=>String(p.group_name||'').trim()===activeRangeFilter).length;
     copy.textContent=`Showing ${count} ${count===1?'strain':'strains'} currently in stock in this range.`;
