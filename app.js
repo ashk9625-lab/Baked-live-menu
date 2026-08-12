@@ -446,6 +446,41 @@ async function saveAllQuickStock(){
   finally{btn.disabled=false;}
 }
 
+
+let bulkAddRows=[];
+function renderBulkAdd(){
+  const box=$('#bulkAddRows'); if(!box)return;
+  const q=($('#bulkAddSearch')?.value||'').trim().toLowerCase();
+  const rows=bulkAddRows.filter(p=>!q||[p.name,p.sku,p.group_name,p.category].some(v=>String(v||'').toLowerCase().includes(q)));
+  box.innerHTML=rows.length?rows.map(p=>`<div class="quick-stock-row">
+    <div class="quick-stock-product"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'')} · ${escapeHtml(p.sku||'No SKU')} · Current: ${Number(p.stock||0)}</small></div>
+    <div class="bulk-add-input"><span>+</span><input class="bulk-add-qty" data-id="${p.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+  </div>`).join(''):'<div class="empty-state"><p>No products found.</p></div>';
+}
+async function loadBulkAdd(){
+  try{
+    bulkAddRows=await api('/rest/v1/products?select=id,sku,name,group_name,category,stock&order=group_name.asc,name.asc',{auth:true});
+    renderBulkAdd();
+  }catch(err){const b=$('#bulkAddRows');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
+}
+function clearBulkAdd(){ $$('.bulk-add-qty').forEach(i=>i.value=''); const m=$('#bulkAddMessage');if(m)m.textContent=''; }
+async function saveBulkAdd(){
+  const changes=$$('.bulk-add-qty').map(i=>({id:i.dataset.id,qty:Number(i.value||0)})).filter(x=>Number.isInteger(x.qty)&&x.qty>0);
+  if(!changes.length){toast('Enter stock received for at least one product');return;}
+  const btn=$('#bulkAddSaveButton');btn.disabled=true;$('#bulkAddMessage').textContent=`Adding stock to ${changes.length} product${changes.length===1?'':'s'}…`;
+  let saved=0;
+  try{
+    for(const c of changes){
+      await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.qty,p_reference:'Bulk Add Stock'})});
+      saved++;
+    }
+    toast(`${saved} stock items added`);
+    $('#bulkAddMessage').textContent=`Added stock to ${saved} product${saved===1?'':'s'} successfully.`;
+    await Promise.all([loadBulkAdd(),loadQuickStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){$('#bulkAddMessage').textContent=`Added ${saved} before an error: ${err.message}`;toast('Some stock could not be added');}
+  finally{btn.disabled=false;}
+}
+
 let stockCsvChanges=[];
 function csvEscape(v){v=String(v??'');return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;}
 function downloadStockCsvTemplate(){const rows=[['SKU','Product','Range','New Stock Quantity'],...quickStockRows.map(p=>[p.sku||'',p.name||'',p.group_name||p.category||'',Number(p.stock||0)])];const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BAKED-STOCK-UPLOAD-TEMPLATE.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
@@ -584,7 +619,7 @@ function runSurpriseMe(){
 }
 
 $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
-$('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').addEventListener('change',()=>{ previewStockCsv(); }); $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers; $('#reloadQuickStockButton').onclick=loadQuickStock; $('#saveAllStockButton').onclick=saveAllQuickStock; $('#quickStockSearch').addEventListener('input',renderQuickStock);
+$('#bulkAddSearch').oninput=renderBulkAdd; $('#bulkAddClearButton').onclick=clearBulkAdd; $('#bulkAddSaveButton').onclick=saveBulkAdd; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').addEventListener('change',()=>{ previewStockCsv(); }); $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers; $('#reloadQuickStockButton').onclick=loadQuickStock; $('#saveAllStockButton').onclick=saveAllQuickStock; $('#quickStockSearch').addEventListener('input',renderQuickStock);
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 $('#backToRangesButton')?.addEventListener('click',clearRange);
