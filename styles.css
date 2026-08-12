@@ -65,3 +65,8 @@
 .qty{display:flex;align-items:center;gap:6px}
 .qty button{min-width:34px;height:34px}
 @media(max-width:500px){.cart-qty-input{width:64px}}
+
+.cart-direct-qty{display:flex;align-items:center;gap:8px}
+.cart-direct-qty label{font-size:12px;font-weight:800;color:var(--muted)}
+.cart-qty-input{width:86px!important;min-width:86px;border:2px solid #bfc9c1!important;border-radius:10px!important;padding:9px 8px!important;text-align:center!important;font-weight:900!important;font-size:16px!important;background:#fff!important;color:#111!important}
+.cart-qty-input:focus{outline:2px solid rgba(34,94,58,.22);border-color:#225e3a!important}

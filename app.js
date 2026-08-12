@@ -194,29 +194,38 @@ function addToCart(id,requestedQuantity=1){
   else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
   persistCart(); toast(`${amount} × ${p.name} added to cart`);
 }
-function changeQty(key,change){
-  const item=cart.find(x=>String(x.cartKey||x.id)===String(key)); if(!item)return;
-  item.quantity=Math.max(0,Math.min(item.stock,item.quantity+change));
-  if(!item.quantity)cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
-  persistCart();
-}
 function setCartQty(key,value){
   const item=cart.find(x=>String(x.cartKey||x.id)===String(key)); if(!item)return;
-  let qty=Math.floor(Number(value)||0);
-  qty=Math.max(0,Math.min(Number(item.stock||0),qty));
-  if(qty<=0)cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
-  else item.quantity=qty;
-  persistCart();
+  const max=Math.max(1,Number(item.stock||1));
+  let qty=parseInt(value,10);
+  if(!Number.isFinite(qty)) qty=item.quantity;
+  qty=Math.max(1,Math.min(max,qty));
+  item.quantity=qty;
+  localStorage.setItem('baked-cart',JSON.stringify(cart));
+  updateCart();
 }
 function updateCart(){
-  const count=cart.reduce((a,b)=>a+b.quantity,0), total=cart.reduce((a,b)=>a+b.quantity*b.price,0);
-  $('#cartCount').textContent=count; $('#cartTotal').textContent=money(total);
-  $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item"><div><strong>${escapeHtml(i.name)}</strong><small>${money(i.price)} each · ${i.stock} available</small></div><div class="qty"><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="-1">−</button><input class="cart-qty-input" data-id="${escapeHtml(i.cartKey||i.id)}" type="number" min="1" max="${i.stock}" value="${i.quantity}" inputmode="numeric" aria-label="Cart quantity for ${escapeHtml(i.name)}"><button data-id="${escapeHtml(i.cartKey||i.id)}" data-change="1">+</button></div></div>`).join('');
-  $('#cartEmpty').classList.toggle('hidden',!!cart.length); $('#checkoutArea').classList.toggle('hidden',!cart.length);
-  $$('.qty button').forEach(b=>b.onclick=()=>changeQty(b.dataset.id,Number(b.dataset.change)));
-  $$('.cart-qty-input').forEach(i=>{
-    i.onchange=()=>setCartQty(i.dataset.id,i.value);
-    i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();setCartQty(i.dataset.id,i.value);i.blur();}};
+  const count=cart.reduce((a,b)=>a+b.quantity,0);
+  const total=cart.reduce((a,b)=>a+b.quantity*b.price,0);
+  $('#cartCount').textContent=count;
+  $('#cartTotal').textContent=money(total);
+  $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item">
+    <div>
+      <strong>${escapeHtml(i.name)}</strong>
+      <small>${money(i.price)} each · ${i.stock} available</small>
+    </div>
+    <div class="cart-direct-qty">
+      <label>Qty</label>
+      <input class="cart-qty-input" data-id="${escapeHtml(i.cartKey||i.id)}" type="number" min="1" max="${i.stock}" value="${i.quantity}" inputmode="numeric" pattern="[0-9]*">
+    </div>
+  </div>`).join('');
+  $('#cartEmpty').classList.toggle('hidden',!!cart.length);
+  $('#checkoutArea').classList.toggle('hidden',!cart.length);
+  $$('.cart-qty-input').forEach(input=>{
+    input.onfocus=()=>input.select();
+    input.onblur=()=>setCartQty(input.dataset.id,input.value);
+    input.onchange=()=>setCartQty(input.dataset.id,input.value);
+    input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur();}};
   });
 }
 function openDrawer(){ $('#cartDrawer').classList.add('open'); $('#drawerBackdrop').classList.remove('hidden'); $('#cartDrawer').setAttribute('aria-hidden','false'); }
