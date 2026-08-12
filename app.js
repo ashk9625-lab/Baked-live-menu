@@ -66,14 +66,14 @@ function renderRangeBrowser(){
     grid.classList.remove('hidden');
     grid.innerHTML=groups.length?groups.map(group=>{
       const count=inStock.filter(p=>String(p.group_name||'').trim()===group).length;
-      return `<button class="range-card" type="button" data-range="${escapeHtml(group)}"><span class="range-card-label">${escapeHtml(group)}</span><strong>${count} ${count===1?'strain':'strains'} available</strong></button>`;
+      return `<button class="range-card" type="button" data-range="${escapeHtml(group)}"><span class="range-card-label">${escapeHtml(group)}</span><strong>Open strains →</strong></button>`;
     }).join(''):`<div class="empty-state wide"><h3>No ranges available</h3><p>Add a Range / Group to your products to show them here.</p></div>`;
     $$('#rangeGrid .range-card').forEach(card=>card.onclick=()=>openRange(card.dataset.range));
   }else{
     if(head)head.classList.remove('hidden');
     title.textContent=activeRangeFilter;
     const count=inStock.filter(p=>String(p.group_name||'').trim()===activeRangeFilter).length;
-    copy.textContent=`Showing ${count} ${count===1?'strain':'strains'} currently in stock in this range.`;
+    copy.textContent=`${count} ${count===1?'strain':'strains'} currently in stock — choose your quantity below.`;
     back.classList.remove('hidden');
     grid.classList.add('hidden');
   }
