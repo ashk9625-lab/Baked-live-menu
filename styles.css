@@ -49,26 +49,3 @@
   .brand-logo{width:56px;height:56px}
 }
 
-/* Baked logo above Products / In Stock / Categories */
-.stats-brand-logo-wrap{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  width:100%;
-  margin:10px 0 18px;
-}
-.stats-brand-logo{
-  width:110px;
-  height:110px;
-  object-fit:contain;
-  display:block;
-}
-@media(max-width:700px){
-  .stats-brand-logo{
-    width:88px;
-    height:88px;
-  }
-  .stats-brand-logo-wrap{
-    margin:8px 0 14px;
-  }
-}
