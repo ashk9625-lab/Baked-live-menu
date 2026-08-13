@@ -123,11 +123,19 @@
   }
 }
 
-.locked-whatsapp-note{
+.locked-order-contact{
   margin:10px 0 14px;
-  padding:10px 12px;
+  padding:11px 12px;
+  border:1px solid var(--line);
   border-radius:10px;
-  background:#f4f4f4;
-  font-size:12px;
-  font-weight:700;
+  background:#f5f7f5;
+  font-size:13px;
 }
+.locked-order-contact span{
+  margin-left:6px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+
+.install-baked-button{white-space:nowrap}@media(max-width:700px){.install-baked-button{width:100%;margin-top:8px}}

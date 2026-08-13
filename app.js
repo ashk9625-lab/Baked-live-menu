@@ -1,6 +1,7 @@
-const LOCKED_WHATSAPP_NUMBERS = ["27678454691", "27720456823", "27676604465"];
 const SUPABASE_URL = 'https://jtahitryhtrjgboqnimz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KeEZVzifnm7OT-hA1h7ueg_1QWL1wCh';
+const LOCKED_ORDER_CONTACT_NUMBER = "27678454691";
+const LOCKED_WHATSAPP_NUMBERS = ["27678454691","27720456823","27676604465"];
 const FALLBACK_PRODUCTS = [
   {id:'demo-1',sku:'PRE-BBC',name:'Blueberry Cheesecake',group_name:'Platinum',category:'Pre-Rolls',strength:'1g',price:120,stock:24,reorder_level:5,description:'Smooth dessert-inspired pre-roll.',image_url:null,active:true},
   {id:'demo-2',sku:'EDI-CD25',name:'Cookie Dough',group_name:'Edibles',category:'Edibles',strength:'25mg',price:65,stock:30,reorder_level:6,description:'Soft cookie dough edible.',image_url:null,active:true},
@@ -19,15 +20,6 @@ const money = (v) => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'Z
 const initials = (name) => name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
 const stockState = (p) => p.stock <= 0 ? ['out','Out of stock'] : p.stock <= p.reorder_level ? ['low','Low stock'] : ['in','In stock'];
 const headers = (auth=false) => ({apikey:SUPABASE_KEY,Authorization:`Bearer ${auth && accessToken ? accessToken : SUPABASE_KEY}`,'Content-Type':'application/json'});
-
-function sendOrderToLockedWhatsApps(message){
-  const encoded=encodeURIComponent(message);
-  LOCKED_WHATSAPP_NUMBERS.forEach((number,index)=>{
-    const url=`https://wa.me/${number}?text=${encoded}`;
-    if(index===0){ window.open(url,'_blank'); }
-    else { setTimeout(()=>window.open(url,'_blank'),350*index); }
-  });
-}
 
 async function api(path, options={}) {
   const response = await fetch(`${SUPABASE_URL}${path}`, {...options, headers:{...headers(options.auth),...(options.headers||{})}});
@@ -271,7 +263,20 @@ function closeStrainModal(){
   if(backdrop && !document.querySelector('.drawer.open'))backdrop.classList.add('hidden');
 }
 
-const WHATSAPP_ORDER_NUMBER = '27678454691';
+const WHATSAPP_ORDER_NUMBER = LOCKED_WHATSAPP_NUMBERS[0];
+
+
+function sendOrderToLockedWhatsApps(message, firstWindow=null){
+  const encoded=encodeURIComponent(message);
+  LOCKED_WHATSAPP_NUMBERS.forEach((number,index)=>{
+    const url=`https://wa.me/${number}?text=${encoded}`;
+    if(index===0 && firstWindow){
+      firstWindow.location.href=url;
+    }else{
+      setTimeout(()=>window.open(url,'_blank'),index*350);
+    }
+  });
+}
 
 function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
   const total = orderedItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
@@ -315,7 +320,7 @@ async function placeOrder(e){
 
   const btn=$('#placeOrderButton');
   const customerName=$('#customerName').value.trim();
-  const customerPhone=$('#customerPhone').value.trim();
+  const customerPhone=LOCKED_ORDER_CONTACT_NUMBER;
   const note=$('#customerNote').value.trim();
   const orderedItems=cart.map(item=>({...item}));
 
@@ -339,7 +344,7 @@ async function placeOrder(e){
     });
 
     const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
-    const whatsappUrl=`https://wa.me/${LOCKED_WHATSAPP_NUMBERS[0]}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
 
     lastOrderForInvoice={orderNo,customerName,customerPhone,note,items:orderedItems,createdAt:new Date().toISOString()};
     const creditUsed=Number(sessionStorage.getItem('baked-credit-use')||0);if(creditUsed>0){const mm=ensureMemberDefaults(getMember());if(mm){mm.storeCredit=Math.max(0,mm.storeCredit-creditUsed);saveMember(mm);}clearMemberCreditUse();}
@@ -351,11 +356,7 @@ async function placeOrder(e){
     $('#printInvoiceButton').onclick=()=>printInvoice();
     toast(`Order ${orderNo} received`);
 
-    if(whatsappWindow){
-      whatsappWindow.location.href=whatsappUrl;
-    }else{
-      window.location.href=whatsappUrl;
-    }
+    sendOrderToLockedWhatsApps(message,whatsappWindow);
 
     await loadProducts();
   }catch(err){
@@ -782,3 +783,47 @@ document.addEventListener('click',e=>{
   if(modal && e.target===modal)closeStrainModal();
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#strainModal')?.classList.contains('hidden'))closeStrainModal();});
+
+
+let bakedInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  bakedInstallPrompt=e;
+  const btn=document.getElementById('installBakedButton');
+  if(btn)btn.classList.remove('hidden');
+});
+window.addEventListener('appinstalled',()=>{
+  bakedInstallPrompt=null;
+  const btn=document.getElementById('installBakedButton');
+  if(btn)btn.classList.add('hidden');
+  if(typeof toast==='function')toast('Baked Menu installed');
+});
+function isIosDevice(){return /iphone|ipad|ipod/i.test(navigator.userAgent);}
+function isStandaloneMode(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;}
+async function installBakedMenu(){
+  if(isStandaloneMode()){if(typeof toast==='function')toast('Baked Menu is already installed');return;}
+  if(bakedInstallPrompt){
+    bakedInstallPrompt.prompt();
+    await bakedInstallPrompt.userChoice;
+    bakedInstallPrompt=null;
+    const btn=document.getElementById('installBakedButton');
+    if(btn)btn.classList.add('hidden');
+    return;
+  }
+  if(isIosDevice()){
+    alert('On iPhone: tap Share in Safari, then choose Add to Home Screen.');
+    return;
+  }
+  alert('Use your browser menu and choose Install app or Add to Home screen.');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const btn=document.getElementById('installBakedButton');
+  if(!btn)return;
+  btn.onclick=installBakedMenu;
+  if(isIosDevice()&&!isStandaloneMode())btn.classList.remove('hidden');
+});
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./service-worker.js').catch(console.error);
+  });
+}

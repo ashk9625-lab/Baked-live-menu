@@ -1,1 +1,18 @@
-{"name":"Baked Africa Live Menu","short_name":"Baked Admin","start_url":"./","display":"standalone","background_color":"#f6f5f0","theme_color":"#102c25","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "Baked Live Menu",
+  "short_name": "Baked",
+  "description": "Baked Africa live product menu and ordering app.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#17211d",
+  "icons": [
+    {
+      "src": "baked-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

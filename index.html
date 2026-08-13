@@ -43,7 +43,7 @@
       <button id="adminButton" class="btn ghost compact">Admin</button>
       <button id="cartButton" class="cart-button" aria-label="Open cart">Cart <span id="cartCount">0</span></button>
     </div>
-  </header>
+  <button id="installBakedButton" class="btn ghost install-baked-button hidden" type="button">Install Baked Menu</button></header>
 
   <main>
     <section id="storeView">
@@ -211,12 +211,12 @@
     <div id="cartItems" class="cart-items"></div>
     <div id="cartEmpty" class="empty-state"><h3>Your cart is empty</h3><p>Add products from the live menu to begin.</p></div>
     <div id="checkoutArea" class="checkout hidden">
-<div class="locked-whatsapp-note">WhatsApp order notifications are locked to 3 store numbers.</div>
+<div class="locked-order-contact">Order contact number: <strong>27678454691</strong> <span>LOCKED</span></div>
       <div class="cart-total"><span>Total</span><strong id="cartTotal">R0</strong></div>
       <button id="clearCartButton" class="btn ghost wide clear-cart-button" type="button">Clear cart</button>
       <form id="checkoutForm" class="form-stack">
         <label>Customer name<input id="customerName" required maxlength="80"></label>
-        <label>Cellphone number<input id="customerPhone" required maxlength="30" inputmode="tel"></label>
+        
         <label>Order notes<textarea id="customerNote" rows="3" maxlength="300" placeholder="Optional"></textarea></label>
         <button id="placeOrderButton" class="btn primary wide" type="submit">Place order</button>
       </form>
