@@ -302,3 +302,46 @@
     justify-content:center !important;
   }
 }
+
+/* NO UNDER 18s policy */
+.under18-policy{
+  margin:14px 0 16px;
+  padding:14px;
+  border:2px solid #111;
+  border-radius:12px;
+  background:#fff;
+  text-align:left;
+}
+.under18-policy strong{
+  display:block;
+  font-size:14px;
+  letter-spacing:.04em;
+  margin-bottom:6px;
+  color:#111;
+}
+.under18-policy span{
+  display:block;
+  font-size:12px;
+  line-height:1.5;
+  color:#5d6861;
+}
+.age-policy-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:7px 10px;
+  border-radius:999px;
+  background:#fff;
+  color:#111;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.05em;
+  white-space:nowrap;
+}
+@media(max-width:620px){
+  .age-policy-badge{
+    display:inline-flex !important;
+    font-size:10px;
+    padding:6px 8px;
+  }
+}
