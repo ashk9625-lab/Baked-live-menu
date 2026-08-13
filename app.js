@@ -42,11 +42,16 @@ function persistCart(){ localStorage.setItem('baked-cart',JSON.stringify(cart));
 function updateStats(){
   $('#productCount').textContent=products.length;
   $('#inStockCount').textContent=products.filter(p=>p.stock>0).length;
-  $('#categoryCount').textContent=new Set(products.map(p=>p.category).filter(Boolean)).size;
+  $('#categoryCount').textContent=new Set(products.map(p=>displayCategory(p.category)).filter(Boolean)).size;
+}
+function displayCategory(category){
+  const c=String(category||'').trim();
+  if(/^(oil|oils|capsule|capsules|oils\s*&\s*capsules)$/i.test(c)) return 'Oils & Capsules';
+  return c;
 }
 function buildFilters(){
   const selected=$('#categoryFilter').value;
-  const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
+  const cats=[...new Set(products.map(p=>displayCategory(p.category)).filter(Boolean))].sort();
   $('#categoryFilter').innerHTML='<option value="all">All categories</option>'+cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
   $('#categoryFilter').value=cats.includes(selected)?selected:'all';
   $('#categoryChips').innerHTML=['all',...cats].map(c=>`<button class="chip ${c===$('#categoryFilter').value?'active':''}" data-category="${escapeHtml(c)}">${c==='all'?'All products':escapeHtml(c)}</button>`).join('');
@@ -164,14 +169,14 @@ function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
-    return (!term||hay.includes(term))&&(cat==='all'||p.category===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
+    return (!term||hay.includes(term))&&(cat==='all'||displayCategory(p.category)===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
   });
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strains=parseStrainList(p.description);
     const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
-    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||p.category||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
+    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&parseStrainList(p.description).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
   $$('.product-quantity').forEach(i=>i.onclick=e=>e.stopPropagation());
@@ -755,7 +760,7 @@ function runSurpriseMe(){
   result.innerHTML=`<div class="surprise-pick"><div class="surprise-image">${img}</div><div class="surprise-copy">
     <div class="surprise-label">YOUR SURPRISE PICK</div><h3>${escapeHtml(pick.name)}</h3>
     <p>${escapeHtml(pick.description||'Available now on the live menu.')}</p>
-    <div class="surprise-meta"><span>${escapeHtml(pick.category||pick.group_name||'Product')}</span><strong>${money(pick.price)}</strong></div>
+    <div class="surprise-meta"><span>${escapeHtml(displayCategory(pick.category)||pick.group_name||'Product')}</span><strong>${money(pick.price)}</strong></div>
     <div class="surprise-actions"><button class="btn primary" id="surpriseAddOne" type="button">Add 1 to cart</button>
     ${qty>1?`<button class="btn ghost" id="surpriseAddBudget" type="button">Add ${qty} (${money(qty*Number(pick.price||0))})</button>`:''}
     <button class="btn ghost" id="surpriseAgain" type="button">Surprise me again</button></div></div></div>`;
