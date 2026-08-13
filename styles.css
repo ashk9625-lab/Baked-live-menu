@@ -76,3 +76,27 @@
 
 .baked-header-logo{display:block;width:64px;height:48px;object-fit:contain;object-position:center}
 @media(max-width:600px){.baked-header-logo{width:52px;height:40px}}
+
+
+/* Compact Mini Silver, Mini Gold and Mini Platinum product images */
+.product-card:has(.product-image img[alt*="MINI SILVER" i]) .product-image,
+.product-card:has(.product-image img[alt*="MINI GOLD" i]) .product-image,
+.product-card:has(.product-image img[alt*="MINI PLATINUM" i]) .product-image{
+  height:150px !important;
+  min-height:150px !important;
+}
+.product-card:has(.product-image img[alt*="MINI SILVER" i]) .product-image img,
+.product-card:has(.product-image img[alt*="MINI GOLD" i]) .product-image img,
+.product-card:has(.product-image img[alt*="MINI PLATINUM" i]) .product-image img{
+  width:82% !important;
+  height:82% !important;
+  object-fit:contain !important;
+}
+@media(max-width:620px){
+  .product-card:has(.product-image img[alt*="MINI SILVER" i]) .product-image,
+  .product-card:has(.product-image img[alt*="MINI GOLD" i]) .product-image,
+  .product-card:has(.product-image img[alt*="MINI PLATINUM" i]) .product-image{
+    height:140px !important;
+    min-height:140px !important;
+  }
+}
