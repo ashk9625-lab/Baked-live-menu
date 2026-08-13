@@ -194,6 +194,12 @@ function addToCart(id,requestedQuantity=1){
   else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
   persistCart(); toast(`${amount} × ${p.name} added to cart`);
 }
+function removeCartItem(key){
+  cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
+  localStorage.setItem('baked-cart',JSON.stringify(cart));
+  updateCart();
+  toast('Item removed from cart');
+}
 function setCartQty(key,value){
   const item=cart.find(x=>String(x.cartKey||x.id)===String(key)); if(!item)return;
   const max=Math.max(1,Number(item.stock||1));
@@ -209,23 +215,33 @@ function updateCart(){
   const total=cart.reduce((a,b)=>a+b.quantity*b.price,0);
   $('#cartCount').textContent=count;
   $('#cartTotal').textContent=money(total);
+
   $('#cartItems').innerHTML=cart.map(i=>`<div class="cart-item">
-    <div>
+    <div class="cart-item-info">
       <strong>${escapeHtml(i.name)}</strong>
       <small>${money(i.price)} each · ${i.stock} available</small>
     </div>
-    <div class="cart-direct-qty">
-      <label>Qty</label>
-      <input class="cart-qty-input" data-id="${escapeHtml(i.cartKey||i.id)}" type="number" min="1" max="${i.stock}" value="${i.quantity}" inputmode="numeric" pattern="[0-9]*">
+    <div class="cart-item-actions">
+      <div class="cart-direct-qty">
+        <label>Qty</label>
+        <input class="cart-qty-input" data-id="${escapeHtml(i.cartKey||i.id)}" type="number" min="1" max="${i.stock}" value="${i.quantity}" inputmode="numeric" pattern="[0-9]*">
+      </div>
+      <button type="button" class="btn danger compact cart-remove-item" data-id="${escapeHtml(i.cartKey||i.id)}">Remove</button>
     </div>
   </div>`).join('');
+
   $('#cartEmpty').classList.toggle('hidden',!!cart.length);
   $('#checkoutArea').classList.toggle('hidden',!cart.length);
+
   $$('.cart-qty-input').forEach(input=>{
     input.onfocus=()=>input.select();
     input.onblur=()=>setCartQty(input.dataset.id,input.value);
     input.onchange=()=>setCartQty(input.dataset.id,input.value);
     input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur();}};
+  });
+
+  $$('.cart-remove-item').forEach(button=>{
+    button.onclick=()=>removeCartItem(button.dataset.id);
   });
 }
 function clearCart(){

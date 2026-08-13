@@ -100,3 +100,12 @@
     min-height:140px !important;
   }
 }
+
+.cart-item-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cart-item-info{display:flex;flex-direction:column;gap:4px}
+.cart-remove-item{white-space:nowrap}
+@media(max-width:600px){
+  .cart-item{align-items:flex-start}
+  .cart-item-actions{width:100%;justify-content:space-between}
+  .cart-remove-item{flex:0 0 auto}
+}
