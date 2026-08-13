@@ -20,7 +20,6 @@ const initials = (name) => name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').to
 const stockState = (p) => p.stock <= 0 ? ['out','Out of stock'] : p.stock <= p.reorder_level ? ['low','Low stock'] : ['in','In stock'];
 const headers = (auth=false) => ({apikey:SUPABASE_KEY,Authorization:`Bearer ${auth && accessToken ? accessToken : SUPABASE_KEY}`,'Content-Type':'application/json'});
 
-async 
 function sendOrderToLockedWhatsApps(message){
   const encoded=encodeURIComponent(message);
   LOCKED_WHATSAPP_NUMBERS.forEach((number,index)=>{
@@ -30,7 +29,7 @@ function sendOrderToLockedWhatsApps(message){
   });
 }
 
-function api(path, options={}) {
+async function api(path, options={}) {
   const response = await fetch(`${SUPABASE_URL}${path}`, {...options, headers:{...headers(options.auth),...(options.headers||{})}});
   if (!response.ok) {
     const body = await response.text();
