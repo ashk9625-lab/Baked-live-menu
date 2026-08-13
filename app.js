@@ -795,7 +795,7 @@ window.addEventListener('beforeinstallprompt',e=>{
 window.addEventListener('appinstalled',()=>{
   bakedInstallPrompt=null;
   const btn=document.getElementById('installBakedButton');
-  if(btn)btn.classList.add('hidden');
+  if(btn)btn.classList.remove('hidden');
   if(typeof toast==='function')toast('Baked Menu installed');
 });
 function isIosDevice(){return /iphone|ipad|ipod/i.test(navigator.userAgent);}
@@ -807,7 +807,7 @@ async function installBakedMenu(){
     await bakedInstallPrompt.userChoice;
     bakedInstallPrompt=null;
     const btn=document.getElementById('installBakedButton');
-    if(btn)btn.classList.add('hidden');
+    if(btn)btn.classList.remove('hidden');
     return;
   }
   if(isIosDevice()){
