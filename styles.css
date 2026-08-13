@@ -78,34 +78,47 @@
 @media(max-width:600px){.baked-header-logo{width:52px;height:40px}}
 
 
-/* Compact Mini Silver, Mini Gold and Mini Platinum product images */
-.product-card:has(.product-image img[alt*="MINI SILVER" i]) .product-image,
-.product-card:has(.product-image img[alt*="MINI GOLD" i]) .product-image,
-.product-card:has(.product-image img[alt*="MINI PLATINUM" i]) .product-image{
-  height:150px !important;
-  min-height:150px !important;
-}
-.product-card:has(.product-image img[alt*="MINI SILVER" i]) .product-image img,
-.product-card:has(.product-image img[alt*="MINI GOLD" i]) .product-image img,
-.product-card:has(.product-image img[alt*="MINI PLATINUM" i]) .product-image img{
-  width:82% !important;
-  height:82% !important;
-  object-fit:contain !important;
-}
-@media(max-width:620px){
-  .product-card:has(.product-image img[alt*="MINI SILVER" i]) .product-image,
-  .product-card:has(.product-image img[alt*="MINI GOLD" i]) .product-image,
-  .product-card:has(.product-image img[alt*="MINI PLATINUM" i]) .product-image{
-    height:140px !important;
-    min-height:140px !important;
-  }
-}
 
-.cart-item-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.cart-item-info{display:flex;flex-direction:column;gap:4px}
-.cart-remove-item{white-space:nowrap}
-@media(max-width:600px){
-  .cart-item{align-items:flex-start}
-  .cart-item-actions{width:100%;justify-content:space-between}
-  .cart-remove-item{flex:0 0 auto}
+
+/* PRODUCT CARD IMAGE LAYOUT FIX */
+.product-card{
+  overflow:hidden !important;
+}
+.product-card .product-image{
+  position:relative !important;
+  width:100% !important;
+  height:230px !important;
+  min-height:230px !important;
+  max-height:230px !important;
+  overflow:hidden !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:16px !important;
+  box-sizing:border-box !important;
+}
+.product-card .product-image img{
+  position:static !important;
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  object-fit:contain !important;
+  object-position:center !important;
+  margin:0 !important;
+  transform:none !important;
+}
+.product-card .product-body{
+  position:relative !important;
+  z-index:2 !important;
+  background:#fff !important;
+}
+@media(max-width:700px){
+  .product-card .product-image{
+    height:200px !important;
+    min-height:200px !important;
+    max-height:200px !important;
+    padding:12px !important;
+  }
 }
