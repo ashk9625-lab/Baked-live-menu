@@ -1,3 +1,4 @@
+const LOCKED_WHATSAPP_NUMBERS = ["27678454691", "27720456823", "27676604465"];
 const SUPABASE_URL = 'https://jtahitryhtrjgboqnimz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KeEZVzifnm7OT-hA1h7ueg_1QWL1wCh';
 const FALLBACK_PRODUCTS = [
@@ -19,7 +20,17 @@ const initials = (name) => name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').to
 const stockState = (p) => p.stock <= 0 ? ['out','Out of stock'] : p.stock <= p.reorder_level ? ['low','Low stock'] : ['in','In stock'];
 const headers = (auth=false) => ({apikey:SUPABASE_KEY,Authorization:`Bearer ${auth && accessToken ? accessToken : SUPABASE_KEY}`,'Content-Type':'application/json'});
 
-async function api(path, options={}) {
+async 
+function sendOrderToLockedWhatsApps(message){
+  const encoded=encodeURIComponent(message);
+  LOCKED_WHATSAPP_NUMBERS.forEach((number,index)=>{
+    const url=`https://wa.me/${number}?text=${encoded}`;
+    if(index===0){ window.open(url,'_blank'); }
+    else { setTimeout(()=>window.open(url,'_blank'),350*index); }
+  });
+}
+
+function api(path, options={}) {
   const response = await fetch(`${SUPABASE_URL}${path}`, {...options, headers:{...headers(options.auth),...(options.headers||{})}});
   if (!response.ok) {
     const body = await response.text();
@@ -329,7 +340,7 @@ async function placeOrder(e){
     });
 
     const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
-    const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl=`https://wa.me/${LOCKED_WHATSAPP_NUMBERS[0]}?text=${encodeURIComponent(message)}`;
 
     lastOrderForInvoice={orderNo,customerName,customerPhone,note,items:orderedItems,createdAt:new Date().toISOString()};
     const creditUsed=Number(sessionStorage.getItem('baked-credit-use')||0);if(creditUsed>0){const mm=ensureMemberDefaults(getMember());if(mm){mm.storeCredit=Math.max(0,mm.storeCredit-creditUsed);saveMember(mm);}clearMemberCreditUse();}
