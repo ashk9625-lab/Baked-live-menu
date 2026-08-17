@@ -268,19 +268,23 @@ function closeStrainModal(){
   if(backdrop && !document.querySelector('.drawer.open'))backdrop.classList.add('hidden');
 }
 
-const WHATSAPP_ORDER_NUMBER = LOCKED_WHATSAPP_NUMBERS[0];
-
 
 function sendOrderToLockedWhatsApps(message, firstWindow=null){
   const encoded=encodeURIComponent(message);
-  LOCKED_WHATSAPP_NUMBERS.forEach((number,index)=>{
-    const url=`https://wa.me/${number}?text=${encoded}`;
-    if(index===0 && firstWindow){
-      firstWindow.location.href=url;
-    }else{
-      setTimeout(()=>window.open(url,'_blank'),index*350);
-    }
+  const urls=LOCKED_WHATSAPP_NUMBERS.map(number=>`https://wa.me/${number}?text=${encoded}`);
+  if(firstWindow){
+    firstWindow.location.href=urls[0];
+  }else{
+    window.location.href=urls[0];
+  }
+
+  // Try to open the other two locked order chats. Some mobile browsers block
+  // multiple automatic pop-ups, so checkout also renders fixed backup buttons.
+  urls.slice(1).forEach((url,index)=>{
+    setTimeout(()=>window.open(url,'_blank','noopener'),450+(index*450));
   });
+
+  return urls;
 }
 
 function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
@@ -349,19 +353,16 @@ async function placeOrder(e){
     });
 
     const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
-    const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
-
     lastOrderForInvoice={orderNo,customerName,customerPhone,note,items:orderedItems,createdAt:new Date().toISOString()};
     const creditUsed=Number(sessionStorage.getItem('baked-credit-use')||0);if(creditUsed>0){const mm=ensureMemberDefaults(getMember());if(mm){mm.storeCredit=Math.max(0,mm.storeCredit-creditUsed);saveMember(mm);}clearMemberCreditUse();}
 
     cart=[];
     persistCart();
     e.target.reset();
-    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. <button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
+    const whatsappUrls=sendOrderToLockedWhatsApps(message,whatsappWindow);
+    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. The order is locked to all 3 WhatsApp numbers.<br><span class="locked-order-links">${LOCKED_WHATSAPP_NUMBERS.map((number,index)=>`<a class="text-button" href="${whatsappUrls[index]}" target="_blank" rel="noopener">WhatsApp ${escapeHtml(number)}</a>`).join(' · ')}</span><br><button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
     $('#printInvoiceButton').onclick=()=>printInvoice();
     toast(`Order ${orderNo} received`);
-
-    sendOrderToLockedWhatsApps(message,whatsappWindow);
 
     await loadProducts();
   }catch(err){
