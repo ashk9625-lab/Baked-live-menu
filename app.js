@@ -324,6 +324,10 @@ async function placeOrder(e){
   const note=$('#customerNote').value.trim();
   const orderedItems=cart.map(item=>({...item}));
 
+  // Open a blank window synchronously from the customer's tap so mobile browsers
+  // allow WhatsApp to launch after the async order submission completes.
+  const whatsappWindow=window.open('about:blank','_blank');
+
   btn.disabled=true;
   $('#checkoutMessage').textContent='Submitting order…';
 
@@ -348,13 +352,22 @@ async function placeOrder(e){
     persistCart();
     e.target.reset();
     const whatsappUrls=getLockedWhatsAppUrls(message);
-    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully.<br>${renderLockedWhatsAppButtons(whatsappUrls)}<br><button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
+    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. Opening WhatsApp to ${LOCKED_WHATSAPP_NUMBERS[0]}…<br>${renderLockedWhatsAppButtons(whatsappUrls)}<br><button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
+
+    // Reliably launch the first locked WhatsApp recipient using the window that
+    // was opened directly by the customer's Place Order tap.
+    if(whatsappWindow){
+      whatsappWindow.location.href=whatsappUrls[0];
+    }else{
+      window.location.href=whatsappUrls[0];
+    }
     $$('.locked-wa-send').forEach(link=>{ link.addEventListener('click',()=>{ link.textContent='✓ Opened '+LOCKED_WHATSAPP_NUMBERS[Number(link.dataset.waIndex)]; }); });
     $('#printInvoiceButton').onclick=()=>printInvoice();
     toast(`Order ${orderNo} received`);
 
     await loadProducts();
   }catch(err){
+    if(whatsappWindow && !whatsappWindow.closed) whatsappWindow.close();
     $('#checkoutMessage').textContent=err.message;
   }
 
