@@ -269,13 +269,22 @@ function closeStrainModal(){
 }
 
 
-function getLockedWhatsAppUrls(message){
+function sendOrderToLockedWhatsApps(message, firstWindow=null){
   const encoded=encodeURIComponent(message);
-  return LOCKED_WHATSAPP_NUMBERS.map(number=>`https://wa.me/${number}?text=${encoded}`);
-}
+  const urls=LOCKED_WHATSAPP_NUMBERS.map(number=>`https://wa.me/${number}?text=${encoded}`);
+  if(firstWindow){
+    firstWindow.location.href=urls[0];
+  }else{
+    window.location.href=urls[0];
+  }
 
-function renderLockedWhatsAppButtons(urls){
-  return `<div class="locked-whatsapp-panel"><strong>Send this order to all 3 locked Baked numbers:</strong><br><small>WhatsApp requires a separate user tap for each recipient. Tap each button and press Send in WhatsApp.</small><div class="locked-order-links">${LOCKED_WHATSAPP_NUMBERS.map((number,index)=>`<a class="text-button locked-wa-send" data-wa-index="${index}" href="${urls[index]}" target="_blank" rel="noopener">${index+1}. Send to ${escapeHtml(number)}</a>`).join(' ')}</div></div>`;
+  // Try to open the other two locked order chats. Some mobile browsers block
+  // multiple automatic pop-ups, so checkout also renders fixed backup buttons.
+  urls.slice(1).forEach((url,index)=>{
+    setTimeout(()=>window.open(url,'_blank','noopener'),450+(index*450));
+  });
+
+  return urls;
 }
 
 function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
@@ -324,8 +333,7 @@ async function placeOrder(e){
   const note=$('#customerNote').value.trim();
   const orderedItems=cart.map(item=>({...item}));
 
-  // Open a blank window synchronously from the customer's tap so mobile browsers
-  // allow WhatsApp to launch after the async order submission completes.
+  // Open a blank tab immediately so browsers do not block WhatsApp after the database request.
   const whatsappWindow=window.open('about:blank','_blank');
 
   btn.disabled=true;
@@ -351,23 +359,14 @@ async function placeOrder(e){
     cart=[];
     persistCart();
     e.target.reset();
-    const whatsappUrls=getLockedWhatsAppUrls(message);
-    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. Opening WhatsApp to ${LOCKED_WHATSAPP_NUMBERS[0]}…<br>${renderLockedWhatsAppButtons(whatsappUrls)}<br><button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
-
-    // Reliably launch the first locked WhatsApp recipient using the window that
-    // was opened directly by the customer's Place Order tap.
-    if(whatsappWindow){
-      whatsappWindow.location.href=whatsappUrls[0];
-    }else{
-      window.location.href=whatsappUrls[0];
-    }
-    $$('.locked-wa-send').forEach(link=>{ link.addEventListener('click',()=>{ link.textContent='✓ Opened '+LOCKED_WHATSAPP_NUMBERS[Number(link.dataset.waIndex)]; }); });
+    const whatsappUrls=sendOrderToLockedWhatsApps(message,whatsappWindow);
+    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. The order is locked to all 3 WhatsApp numbers.<br><span class="locked-order-links">${LOCKED_WHATSAPP_NUMBERS.map((number,index)=>`<a class="text-button" href="${whatsappUrls[index]}" target="_blank" rel="noopener">WhatsApp ${escapeHtml(number)}</a>`).join(' · ')}</span><br><button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
     $('#printInvoiceButton').onclick=()=>printInvoice();
     toast(`Order ${orderNo} received`);
 
     await loadProducts();
   }catch(err){
-    if(whatsappWindow && !whatsappWindow.closed) whatsappWindow.close();
+    if(whatsappWindow) whatsappWindow.close();
     $('#checkoutMessage').textContent=err.message;
   }
 
@@ -676,68 +675,21 @@ function compressImage(file){return new Promise((resolve,reject)=>{const reader=
 
 function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); }
 
-function luhnValidSouthAfricanId(idNumber){
-  if(!/^\d{13}$/.test(idNumber)) return false;
-  let oddSum=0;
-  for(let i=0;i<12;i+=2) oddSum+=Number(idNumber[i]);
-  const evenNumber=Number(idNumber.slice(1,12).split('').filter((_,i)=>i%2===0).join(''))*2;
-  const evenSum=String(evenNumber).split('').reduce((sum,d)=>sum+Number(d),0);
-  const check=(10-((oddSum+evenSum)%10))%10;
-  return check===Number(idNumber[12]);
-}
-function birthDateFromSouthAfricanId(idNumber){
-  const yy=Number(idNumber.slice(0,2));
-  const mm=Number(idNumber.slice(2,4));
-  const dd=Number(idNumber.slice(4,6));
-  const today=new Date();
-  const currentYY=today.getFullYear()%100;
-  const year=yy<=currentYY?2000+yy:1900+yy;
-  const birthDate=new Date(year,mm-1,dd);
-  if(birthDate.getFullYear()!==year||birthDate.getMonth()!==mm-1||birthDate.getDate()!==dd||birthDate>today) return null;
-  return birthDate;
-}
-function ageOnDate(birthDate,today=new Date()){
-  let age=today.getFullYear()-birthDate.getFullYear();
-  const beforeBirthday=today.getMonth()<birthDate.getMonth()||(today.getMonth()===birthDate.getMonth()&&today.getDate()<birthDate.getDate());
-  if(beforeBirthday) age--;
-  return age;
-}
-function verifyCustomerAge(event){
-  event.preventDefault();
-  const input=$('#customerIdNumber');
-  const message=$('#ageCheckMessage');
-  const idNumber=input.value.replace(/\s+/g,'');
-  input.value=idNumber;
-  message.textContent='';
-  if(!/^\d{13}$/.test(idNumber)){
-    message.textContent='Please enter a valid 13-digit South African ID number.';
-    input.focus();
-    return;
-  }
-  const birthDate=birthDateFromSouthAfricanId(idNumber);
-  if(!birthDate||!luhnValidSouthAfricanId(idNumber)){
-    message.textContent='This ID number is not valid. Please check it and try again.';
-    input.focus();
-    return;
-  }
-  if(ageOnDate(birthDate)<18){
-    message.textContent='Access denied. You must be 18 or older to enter this site.';
-    input.value='';
-    input.focus();
-    return;
-  }
-  sessionStorage.setItem('baked-age-verified','yes');
-  input.value='';
+function confirmAdultEntry(){
+  localStorage.setItem('baked-age-verified','yes');
   $('#ageGate').classList.add('hidden');
 }
+function exitUnder18(){
+  localStorage.removeItem('baked-age-verified');
+  window.location.href='https://www.google.com';
+}
+if(localStorage.getItem('baked-age-verified')==='yes') $('#ageGate').classList.add('hidden');
+$('#enterSite18').addEventListener('click',confirmAdultEntry);
+$('#leaveSite').addEventListener('click',exitUnder18);
 $('#productImageFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;$('#productFormMessage').textContent='Preparing photo…';try{$('#productImage').value=await compressImage(file);$('#productFormMessage').textContent='Photo ready'}catch{$('#productFormMessage').textContent='Could not process photo'}});
 $('#settingsForm').addEventListener('submit',saveSiteSettings);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
 $('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
-$('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
-$('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,13)});
-$('#leaveSite').onclick=()=>location.href='https://www.google.com';
-if(sessionStorage.getItem('baked-age-verified')==='yes') $('#ageGate').classList.add('hidden');
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; 
 
