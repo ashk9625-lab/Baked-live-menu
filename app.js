@@ -394,7 +394,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); await updateAdminAlerts(); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -485,14 +485,113 @@ async function adjustStock(e){
   e.preventDefault(); $('#stockFormMessage').textContent='Updating…';
   try{ await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:$('#stockProductId').value,p_quantity:Number($('#stockQuantity').value),p_reference:$('#stockReference').value.trim()})}); closeOverlays();toast('Stock updated');await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]); }catch(err){ $('#stockFormMessage').textContent=err.message; }
 }
+let adminOrdersCache=[];
+
 async function loadOrders(){
   try{
     const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
-    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
+    adminOrdersCache=orders||[];
+    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
+    $$('.view-order-detail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.id));
     $$('.delete-order').forEach(b=>b.onclick=()=>deleteOrder(b.dataset.id,b.dataset.number));
+    updateAdminAlerts();
   }catch(err){$('#adminOrders').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
+
+
+let selectedOrderDetail=null;
+
+function openOrderDetail(id){
+  const order=adminOrdersCache.find(o=>String(o.id)===String(id));
+  if(!order)return toast('Order could not be found');
+  selectedOrderDetail=order;
+  $('#orderDetailTitle').textContent=order.order_number;
+  const items=order.order_items||[];
+  $('#orderDetailContent').innerHTML=`
+    <div class="order-detail-meta">
+      <div><span>Customer</span><strong>${escapeHtml(order.customer_name||'')}</strong></div>
+      <div><span>Contact</span><strong>${escapeHtml(order.customer_phone||'')}</strong></div>
+      <div><span>Date</span><strong>${new Date(order.created_at).toLocaleString('en-ZA')}</strong></div>
+      <div><span>Status</span><strong>${escapeHtml(order.status||'Pending')}</strong></div>
+    </div>
+    <div class="order-detail-table-wrap">
+      <table class="order-detail-table">
+        <thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
+        <tbody>${items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td>${money(i.unit_price)}</td><td>${money(i.line_total)}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${order.note?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(order.note)}</p></div>`:''}
+    <div class="order-detail-total"><span>Order Total</span><strong>${money(order.total)}</strong></div>`;
+  $('#orderDetailModal').classList.remove('hidden');
+  $('#orderDetailModal').setAttribute('aria-hidden','false');
+  $('#drawerBackdrop').classList.remove('hidden');
+}
+
+function printPackingSlip(order=selectedOrderDetail){
+  if(!order)return toast('Open an order first');
+  const items=order.order_items||[];
+  const rows=items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
+  const w=window.open('','_blank','width=900,height=800');
+  if(!w)return toast('Allow pop-ups to print the packing slip');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Packing Slip ${escapeHtml(order.order_number)}</title>
+  <style>
+  body{font-family:Arial,sans-serif;color:#111;padding:35px;max-width:900px;margin:auto}
+  .head{display:flex;justify-content:space-between;gap:30px;border-bottom:3px solid #111;padding-bottom:18px;margin-bottom:22px}
+  .brand{font-size:27px;font-weight:900}.sub{color:#666;font-size:12px;margin-top:4px}
+  .info{display:grid;grid-template-columns:1fr 1fr;gap:8px 30px;margin:20px 0}.info div{border-bottom:1px solid #ddd;padding:8px 0}
+  table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #bbb;padding:13px;text-align:left}th{background:#f1f1f1}
+  th:nth-child(2),td:nth-child(2){width:110px;text-align:center}th:nth-child(3),td:nth-child(3){width:150px;text-align:center}
+  .packing-box{height:34px}.notes{margin-top:20px;border:1px solid #ccc;padding:14px;min-height:55px}
+  .sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:55px}.line{border-top:1px solid #111;padding-top:7px;font-size:12px}
+  button{margin-top:25px;padding:10px 18px}@media print{button{display:none}body{padding:5px}}
+  </style></head><body>
+  <div class="head"><div><div class="brand">BAKED AFRICA</div><div class="sub">ORDER & PACKING SHEET</div></div><div><strong>${escapeHtml(order.order_number)}</strong><div class="sub">${new Date(order.created_at).toLocaleString('en-ZA')}</div></div></div>
+  <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>Contact:</strong> ${escapeHtml(order.customer_phone||'')}</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
+  <table><thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Packing Qty</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(order.note||'')}</div>
+  <div class="sign"><div class="line">Packed by / Signature</div><div class="line">Checked by / Signature</div></div>
+  <button onclick="window.print()">Print Packing Slip</button>
+  </body></html>`);
+  w.document.close();w.focus();setTimeout(()=>w.print(),250);
+}
+
+async function updateAdminAlerts(){
+  if(!accessToken)return;
+  try{
+    if(!adminOrdersCache.length){
+      try{adminOrdersCache=await api('/rest/v1/orders?select=id,order_number,customer_name,status,total,created_at&order=created_at.desc&limit=100',{auth:true})||[]}catch{}
+    }
+    let alertProducts=products;
+    if(!alertProducts?.length){
+      try{alertProducts=await api('/rest/v1/products?select=id,name,stock,reorder_level,description,active&active=eq.true',{auth:true})||[]}catch{alertProducts=[]}
+    }
+    const pending=adminOrdersCache.filter(o=>String(o.status||'Pending')==='Pending');
+    const rows=stockDashFlatten(alertProducts||[]);
+    const out=rows.filter(r=>r.qty<=0);
+    const low=rows.filter(r=>r.qty>0&&r.qty<=r.reorder);
+    const total=pending.length+out.length+low.length;
+    const badge=$('#adminAlertCount');
+    if(badge){badge.textContent=total;badge.classList.toggle('hidden',total===0)}
+    if($('#alertNewOrders'))$('#alertNewOrders').textContent=pending.length;
+    if($('#alertLowStock'))$('#alertLowStock').textContent=low.length;
+    if($('#alertOutStock'))$('#alertOutStock').textContent=out.length;
+    const alerts=[];
+    pending.slice(0,10).forEach(o=>alerts.push({type:'order',level:'order',title:`New order ${o.order_number}`,text:`${o.customer_name||'Customer'} · ${money(o.total||0)}`}));
+    out.slice(0,15).forEach(r=>alerts.push({type:'stock',level:'out',title:'Out of stock',text:r.name}));
+    low.slice(0,15).forEach(r=>alerts.push({type:'stock',level:'low',title:'Low stock',text:`${r.name} · ${r.qty} remaining`}));
+    const list=$('#adminAlertsList');
+    if(list)list.innerHTML=alerts.length?alerts.map(a=>`<article class="admin-alert-item ${a.level}"><span class="admin-alert-dot"></span><div><strong>${escapeHtml(a.title)}</strong><small>${escapeHtml(a.text)}</small></div></article>`).join(''):'<div class="alerts-clear"><strong>All clear</strong><span>No active order or stock alerts.</span></div>';
+  }catch(e){console.warn('Could not update admin alerts',e)}
+}
+
+function openAdminAlerts(){
+  updateAdminAlerts();
+  $('#adminAlertsModal').classList.remove('hidden');
+  $('#adminAlertsModal').setAttribute('aria-hidden','false');
+  $('#drawerBackdrop').classList.remove('hidden');
+}
+
 async function setOrderStatus(id,status){ try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:status})});toast('Order status updated');await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);}catch(err){toast(err.message);await loadOrders();} }
 async function deleteOrder(id,number){
   if(!confirm(`Permanently delete order ${number}?\n\nThis cannot be undone and will not change current stock.`))return;
@@ -918,6 +1017,11 @@ if($('#refreshStockDashboard'))$('#refreshStockDashboard').onclick=loadStockDash
 if($('#exportStockDashboard'))$('#exportStockDashboard').onclick=exportStockDashboardCsv;
 if($('#sdSearch'))$('#sdSearch').oninput=renderStockDashboard;
 if($('#sdStatus'))$('#sdStatus').onchange=renderStockDashboard;
+if($('#adminAlertsButton'))$('#adminAlertsButton').onclick=openAdminAlerts;
+if($('#printPackingSlipButton'))$('#printPackingSlipButton').onclick=()=>printPackingSlip();
+if($('#alertsGoOrders'))$('#alertsGoOrders').onclick=()=>{closeOverlays();switchAdminTab('orders');};
+if($('#alertsGoStock'))$('#alertsGoStock').onclick=()=>{closeOverlays();switchAdminTab('stockdashboard');};
+
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
 $('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));

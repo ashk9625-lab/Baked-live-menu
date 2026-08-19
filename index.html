@@ -126,7 +126,12 @@
       <div id="adminDashboard" class="hidden">
         <div class="admin-heading">
           <div><p class="eyebrow accent">BAKED CONTROL CENTRE</p><h2>Admin Dashboard</h2></div>
-          <button id="logoutButton" class="btn ghost">Sign out</button>
+          <div class="admin-heading-actions">
+            <button id="adminAlertsButton" class="btn ghost admin-alert-button" type="button" aria-label="Open Admin Alerts">
+              <span class="alert-bell">🔔</span> Alerts <b id="adminAlertCount" class="alert-count hidden">0</b>
+            </button>
+            <button id="logoutButton" class="btn ghost">Sign out</button>
+          </div>
         </div>
         <div class="admin-tabs">
           <button class="admin-tab active" data-tab="products">Products</button>
@@ -331,6 +336,39 @@
         <button class="btn primary wide" type="submit">Update stock</button>
       </form>
       <p id="stockFormMessage" class="form-message"></p>
+    </div>
+  </div>
+
+  <div id="orderDetailModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card order-detail-card">
+      <div class="modal-head">
+        <div><p class="eyebrow accent">ORDER DETAIL</p><h2 id="orderDetailTitle">Order</h2></div>
+        <button class="icon-button" type="button" data-close="orderDetailModal">×</button>
+      </div>
+      <div id="orderDetailContent"></div>
+      <div class="modal-actions order-detail-actions">
+        <button id="printPackingSlipButton" class="btn primary" type="button">Print Packing Slip</button>
+        <button class="btn ghost" type="button" data-close="orderDetailModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adminAlertsModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card alerts-centre-card">
+      <div class="modal-head">
+        <div><p class="eyebrow accent">ADMIN ALERTS CENTRE</p><h2>Needs Attention</h2></div>
+        <button class="icon-button" type="button" data-close="adminAlertsModal">×</button>
+      </div>
+      <div class="alerts-summary">
+        <div><strong id="alertNewOrders">0</strong><span>New Orders</span></div>
+        <div><strong id="alertLowStock">0</strong><span>Low Stock</span></div>
+        <div><strong id="alertOutStock">0</strong><span>Out of Stock</span></div>
+      </div>
+      <div id="adminAlertsList" class="admin-alerts-list"></div>
+      <div class="modal-actions">
+        <button id="alertsGoOrders" class="btn ghost" type="button">View Orders</button>
+        <button id="alertsGoStock" class="btn primary" type="button">View Stock Dashboard</button>
+      </div>
     </div>
   </div>
 
