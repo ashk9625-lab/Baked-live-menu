@@ -1135,18 +1135,18 @@ async function submitMenuSuggestion(event){
   if(suggestion.length<3){if(msg)msg.textContent='Please enter your suggestion.';return;}
   try{
     if(msg)msg.textContent='Sending…';
-    await api('/rest/v1/menu_suggestions',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({customer_name,suggestion})});
+    await api('/rest/v1/rpc/submit_menu_suggestion',{method:'POST',body:JSON.stringify({p_customer_name:customer_name||'',p_suggestion:suggestion})});
     if(msg)msg.textContent='Thank you — your suggestion has been sent.';
     $('#suggestionForm')?.reset();
     setTimeout(()=>$('#suggestionModal')?.classList.add('hidden'),1300);
-  }catch(err){if(msg)msg.textContent='Could not send suggestion. Please try again.';}
+  }catch(err){console.error('Suggestion submit failed',err);if(msg)msg.textContent='Could not send suggestion. Please try again.';}
 }
 async function loadMenuSuggestions(){
   const list=$('#adminSuggestions'),msg=$('#suggestionsAdminMessage');
   if(!list)return;
   try{
     if(msg)msg.textContent='Loading…';
-    const rows=await api('/rest/v1/menu_suggestions?select=*&order=created_at.desc',{auth:true});
+    const rows=await api('/rest/v1/rpc/get_menu_suggestions',{method:'POST',auth:true,body:'{}'});
     $('#suggestionAdminCount').textContent=rows.length?`(${rows.filter(x=>x.status==='New').length})`:'';
     list.innerHTML=rows.length?rows.map(x=>`<div class="suggestion-admin-item">
       <div><strong>${escapeHtml(x.customer_name||'Anonymous')}</strong><small>${new Date(x.created_at).toLocaleString('en-ZA')}</small></div>
@@ -1159,12 +1159,12 @@ async function loadMenuSuggestions(){
   }catch(err){if(msg)msg.textContent='Could not load suggestions.';}
 }
 async function updateSuggestionStatus(id,status){
-  await api(`/rest/v1/menu_suggestions?id=eq.${id}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({status})});
+  await api('/rest/v1/rpc/set_menu_suggestion_status',{method:'POST',auth:true,body:JSON.stringify({p_id:Number(id),p_status:status})});
   loadMenuSuggestions();
 }
 async function deleteSuggestion(id){
   if(!confirm('Delete this suggestion?'))return;
-  await api(`/rest/v1/menu_suggestions?id=eq.${id}`,{method:'DELETE',auth:true});
+  await api('/rest/v1/rpc/delete_menu_suggestion',{method:'POST',auth:true,body:JSON.stringify({p_id:Number(id)})});
   loadMenuSuggestions();
 }
 document.addEventListener('click',e=>{
