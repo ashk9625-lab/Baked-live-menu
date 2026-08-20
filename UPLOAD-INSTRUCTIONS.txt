@@ -1,0 +1,22 @@
+BAKED SURPRISE ME – STRAIN FIX
+
+WHAT THIS FIX DOES
+- Surprise Me now selects an actual available strain, not only the range/product.
+- Example result: King Green — Baked Alaska
+- Only strains with stock greater than 0 are eligible.
+- The selected strain is added to the cart using the existing strain cart logic.
+- The budget quantity respects that strain's available stock.
+- Products without strains still work normally.
+
+UPLOAD STEPS
+1. Upload surprise-me-strain-fix.js to the SAME GitHub folder as app.js and index.html.
+2. Open index.html in GitHub and click Edit.
+3. Near the very bottom, find the existing line that loads app.js, for example:
+   <script src="app.js"></script>
+4. Directly AFTER it add:
+   <script src="surprise-me-strain-fix.js"></script>
+5. Commit the change.
+6. Wait for the live site to redeploy, then refresh the menu.
+
+IMPORTANT
+The new script MUST load after app.js.
