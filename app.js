@@ -1124,3 +1124,57 @@ document.addEventListener('click',event=>{
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape')closeFullProductImage();
 });
+
+
+/* Baked customer suggestion box */
+async function submitMenuSuggestion(event){
+  event.preventDefault();
+  const suggestion=$('#suggestionText')?.value.trim()||'';
+  const customer_name=$('#suggestionName')?.value.trim()||null;
+  const msg=$('#suggestionMessage');
+  if(suggestion.length<3){if(msg)msg.textContent='Please enter your suggestion.';return;}
+  try{
+    if(msg)msg.textContent='Sending…';
+    await api('/rest/v1/menu_suggestions',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({customer_name,suggestion})});
+    if(msg)msg.textContent='Thank you — your suggestion has been sent.';
+    $('#suggestionForm')?.reset();
+    setTimeout(()=>$('#suggestionModal')?.classList.add('hidden'),1300);
+  }catch(err){if(msg)msg.textContent='Could not send suggestion. Please try again.';}
+}
+async function loadMenuSuggestions(){
+  const list=$('#adminSuggestions'),msg=$('#suggestionsAdminMessage');
+  if(!list)return;
+  try{
+    if(msg)msg.textContent='Loading…';
+    const rows=await api('/rest/v1/menu_suggestions?select=*&order=created_at.desc',{auth:true});
+    $('#suggestionAdminCount').textContent=rows.length?`(${rows.filter(x=>x.status==='New').length})`:'';
+    list.innerHTML=rows.length?rows.map(x=>`<div class="suggestion-admin-item">
+      <div><strong>${escapeHtml(x.customer_name||'Anonymous')}</strong><small>${new Date(x.created_at).toLocaleString('en-ZA')}</small></div>
+      <p>${escapeHtml(x.suggestion)}</p>
+      <div class="suggestion-admin-actions">
+        <select data-suggestion-status="${x.id}"><option ${x.status==='New'?'selected':''}>New</option><option ${x.status==='Reviewed'?'selected':''}>Reviewed</option><option ${x.status==='Done'?'selected':''}>Done</option></select>
+        <button class="btn danger compact" data-delete-suggestion="${x.id}" type="button">Delete</button>
+      </div></div>`).join(''):'<div class="empty-state">No customer suggestions yet.</div>';
+    if(msg)msg.textContent='';
+  }catch(err){if(msg)msg.textContent='Could not load suggestions.';}
+}
+async function updateSuggestionStatus(id,status){
+  await api(`/rest/v1/menu_suggestions?id=eq.${id}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({status})});
+  loadMenuSuggestions();
+}
+async function deleteSuggestion(id){
+  if(!confirm('Delete this suggestion?'))return;
+  await api(`/rest/v1/menu_suggestions?id=eq.${id}`,{method:'DELETE',auth:true});
+  loadMenuSuggestions();
+}
+document.addEventListener('click',e=>{
+  if(e.target.closest('#openSuggestionBox')){$('#suggestionModal')?.classList.remove('hidden');}
+  if(e.target.closest('#closeSuggestionBox')||e.target.id==='suggestionModal'){$('#suggestionModal')?.classList.add('hidden');}
+  const del=e.target.closest('[data-delete-suggestion]');if(del)deleteSuggestion(del.dataset.deleteSuggestion);
+});
+document.addEventListener('change',e=>{
+  if(e.target.matches('[data-suggestion-status]'))updateSuggestionStatus(e.target.dataset.suggestionStatus,e.target.value);
+});
+$('#suggestionForm')?.addEventListener('submit',submitMenuSuggestion);
+$('#refreshSuggestionsButton')?.addEventListener('click',loadMenuSuggestions);
+document.addEventListener('click',e=>{if(e.target.closest('.admin-tab[data-tab="suggestions"]'))setTimeout(loadMenuSuggestions,0);});

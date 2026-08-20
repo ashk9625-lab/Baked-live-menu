@@ -97,6 +97,11 @@
       <div id="categoryChips" class="chips"></div>
       <div id="status" class="status">Loading live stock…</div>
       <section id="productGrid" class="product-grid"></section>
+
+      <section class="suggestion-cta">
+        <div><p class="eyebrow accent">HELP US IMPROVE</p><h2>Got an idea for the menu?</h2><p>Suggest a product, feature or improvement you would like to see.</p></div>
+        <button id="openSuggestionBox" class="btn primary" type="button">💡 Suggest an idea</button>
+      </section>
     </section>
 
     <section id="adminView" class="admin-view hidden">
@@ -140,6 +145,7 @@
           <button class="admin-tab" data-tab="sales">Sales</button>
           <button class="admin-tab" data-tab="stockdashboard">Stock Dashboard</button>
           <button class="admin-tab" data-tab="settings">Settings</button>
+          <button class="admin-tab" data-tab="suggestions">Suggestions <span id="suggestionAdminCount"></span></button>
           <button class="admin-tab" data-tab="users">Admin Users</button>
         </div>
 
@@ -234,6 +240,13 @@
           <div class="sales-section-head"><div><h4>Recent Sales</h4><p>Latest order activity in the selected period.</p></div></div>
           <div id="salesRecent" class="sales-recent"></div>
           <p id="salesMessage" class="form-message"></p>
+        </section>
+
+        
+        <section id="suggestionsTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar"><div><h3>Customer Suggestions</h3><p class="admin-help">Ideas submitted from the live menu.</p></div><button id="refreshSuggestionsButton" class="btn ghost" type="button">Refresh</button></div>
+          <div id="adminSuggestions" class="admin-list"></div>
+          <p id="suggestionsAdminMessage" class="form-message"></p>
         </section>
 
         <section id="usersTab" class="admin-tab-panel hidden">
@@ -409,6 +422,22 @@
     <button id="productImageViewerClose" class="product-image-viewer-close" type="button" aria-label="Close full image">×</button>
     <img id="productImageViewerImg" src="" alt="">
     <div id="productImageViewerName" class="product-image-viewer-name"></div>
+  </div>
+
+
+  <div id="suggestionModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="suggestionTitle">
+    <div class="modal-card suggestion-modal-card">
+      <button id="closeSuggestionBox" class="modal-close" type="button" aria-label="Close">×</button>
+      <p class="eyebrow accent">BAKED SUGGESTION BOX</p>
+      <h2 id="suggestionTitle">What should we add or improve?</h2>
+      <p>Your ideas help us improve the live menu.</p>
+      <form id="suggestionForm" class="form-stack">
+        <label>Your name <span class="optional">(optional)</span><input id="suggestionName" type="text" maxlength="80" placeholder="Name"></label>
+        <label>Your suggestion<textarea id="suggestionText" maxlength="1000" rows="5" placeholder="Tell us your idea…" required></textarea></label>
+        <button class="btn primary wide" type="submit">Send suggestion</button>
+      </form>
+      <p id="suggestionMessage" class="form-message"></p>
+    </div>
   </div>
 
 </body>
