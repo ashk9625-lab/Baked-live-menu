@@ -2,7 +2,6 @@
   "name": "Baked Live Menu",
   "short_name": "Baked",
   "description": "Baked Africa live product menu and ordering app.",
-  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -10,22 +9,10 @@
   "theme_color": "#17211d",
   "icons": [
     {
-      "src": "icon-192.png",
-      "sizes": "192x192",
+      "src": "baked-logo.png",
+      "sizes": "any",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }
