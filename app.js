@@ -1082,3 +1082,45 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js').catch(console.error);
   });
 }
+
+
+/* Customer full-screen product image viewer */
+function openFullProductImage(src,name='Product'){
+  if(!src)return;
+  const viewer=$('#productImageViewer');
+  const img=$('#productImageViewerImg');
+  const label=$('#productImageViewerName');
+  if(!viewer||!img)return;
+  img.src=src;
+  img.alt=name;
+  if(label)label.textContent=name;
+  viewer.classList.remove('hidden');
+  viewer.setAttribute('aria-hidden','false');
+  document.body.classList.add('product-image-viewer-open');
+}
+function closeFullProductImage(){
+  const viewer=$('#productImageViewer');
+  const img=$('#productImageViewerImg');
+  if(!viewer)return;
+  viewer.classList.add('hidden');
+  viewer.setAttribute('aria-hidden','true');
+  document.body.classList.remove('product-image-viewer-open');
+  if(img)img.src='';
+}
+document.addEventListener('click',event=>{
+  const image=event.target.closest('#storeView .product-card .product-image img');
+  if(image){
+    event.preventDefault();
+    event.stopPropagation();
+    const card=image.closest('.product-card');
+    const name=card?.querySelector('h3')?.textContent?.trim() || image.alt || 'Product';
+    openFullProductImage(image.currentSrc||image.src,name);
+    return;
+  }
+  if(event.target.id==='productImageViewer' || event.target.closest('#productImageViewerClose')){
+    closeFullProductImage();
+  }
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape')closeFullProductImage();
+});
