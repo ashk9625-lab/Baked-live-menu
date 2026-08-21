@@ -1175,6 +1175,6 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
   if(e.target.matches('[data-suggestion-status]'))updateSuggestionStatus(e.target.dataset.suggestionStatus,e.target.value);
 });
-$('#suggestionForm')?.addEventListener('submit',submitMenuSuggestion);
+document.addEventListener('submit',e=>{if(e.target?.id==='suggestionForm')submitMenuSuggestion(e);});
 $('#refreshSuggestionsButton')?.addEventListener('click',loadMenuSuggestions);
 document.addEventListener('click',e=>{if(e.target.closest('.admin-tab[data-tab="suggestions"]'))setTimeout(loadMenuSuggestions,0);});
