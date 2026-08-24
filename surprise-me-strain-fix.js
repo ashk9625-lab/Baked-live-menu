@@ -269,11 +269,40 @@
     },true);
   }
 
-  function observeUI(){
-    const obs=new MutationObserver(()=>{
-      injectAdvancedFilters();ensureCompareUI();decorateProductCards();renderNewArrivals();decorateAdminProducts();injectAnalyticsAdmin();enhanceAnnouncementSettings();enhanceInstallExperience();
-    });
-    obs.observe(document.body,{childList:true,subtree:true});
+  function refreshEnhancements(){
+    injectAdvancedFilters();
+    ensureCompareUI();
+    decorateProductCards();
+    renderNewArrivals();
+    decorateAdminProducts();
+    injectAnalyticsAdmin();
+    enhanceAnnouncementSettings();
+    enhanceInstallExperience();
+  }
+
+  function hookRenderers(){
+    // Avoid observing the entire DOM: that can recursively trigger itself and freeze the page.
+    // Instead refresh enhancements only after the app's real render functions run.
+    if(typeof window.renderProducts==='function' && !window.renderProducts.__bakedEnhWrapped){
+      const original=window.renderProducts;
+      const wrapped=function(...args){
+        const result=original.apply(this,args);
+        Promise.resolve().then(refreshEnhancements);
+        return result;
+      };
+      wrapped.__bakedEnhWrapped=true;
+      window.renderProducts=wrapped;
+    }
+    if(typeof window.loadAdminProducts==='function' && !window.loadAdminProducts.__bakedEnhWrapped){
+      const original=window.loadAdminProducts;
+      const wrapped=async function(...args){
+        const result=await original.apply(this,args);
+        refreshEnhancements();
+        return result;
+      };
+      wrapped.__bakedEnhWrapped=true;
+      window.loadAdminProducts=wrapped;
+    }
   }
 
   function surpriseMeWithStrains() {
@@ -326,5 +355,5 @@
   const goButton = document.querySelector('#surpriseGo');
   if (goButton) goButton.onclick = surpriseMeWithStrains;
 
-  injectStyles();injectAdvancedFilters();ensureCompareUI();decorateProductCards();renderNewArrivals();decorateAdminProducts();injectAnalyticsAdmin();enhanceAnnouncementSettings();enhanceInstallExperience();bindAnalyticsClicks();observeUI();
+  injectStyles();hookRenderers();refreshEnhancements();bindAnalyticsClicks();
 })();
