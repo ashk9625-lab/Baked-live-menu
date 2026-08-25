@@ -173,7 +173,7 @@ function renderProducts(){
   });
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
-    const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
+    const [state,label]=stockState(p), img=p.image_url?`<img class="click-enlarge-image" data-full-src="${escapeHtml(p.image_url)}" data-product-name="${escapeHtml(p.name)}" src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strains=parseStrainList(p.description);
     const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
     return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
@@ -1195,4 +1195,69 @@ if('serviceWorker' in navigator){
   document.addEventListener('keydown',function(e){if(e.key==='Escape')closeProductImageViewer();});
   window.openProductImageViewer=openProductImageViewer;
   window.closeProductImageViewer=closeProductImageViewer;
+})();
+
+
+/* ===== PRODUCT IMAGE FULLSCREEN VIEWER ===== */
+(function(){
+  function ensureProductImageViewer(){
+    let modal=document.getElementById('productImageViewer');
+    if(modal)return modal;
+    modal=document.createElement('div');
+    modal.id='productImageViewer';
+    modal.className='hidden';
+    modal.setAttribute('aria-hidden','true');
+    modal.innerHTML=`
+      <div class="baked-image-viewer-backdrop"></div>
+      <div class="baked-image-viewer-dialog" role="dialog" aria-modal="true" aria-label="Product image">
+        <button type="button" class="baked-image-viewer-close" aria-label="Close image">×</button>
+        <img class="baked-image-viewer-img" alt="Product image">
+        <div class="baked-image-viewer-name"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    const style=document.createElement('style');
+    style.id='bakedImageViewerStyles';
+    style.textContent=`
+      #productImageViewer{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px}
+      #productImageViewer.hidden{display:none!important}
+      .baked-image-viewer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.88)}
+      .baked-image-viewer-dialog{position:relative;z-index:1;max-width:min(94vw,1100px);max-height:94vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+      .baked-image-viewer-img{display:block;max-width:94vw;max-height:84vh;width:auto;height:auto;object-fit:contain;background:#fff;border-radius:16px;box-shadow:0 20px 70px rgba(0,0,0,.45)}
+      .baked-image-viewer-close{position:absolute;top:-18px;right:-18px;width:46px;height:46px;border:0;border-radius:50%;background:#fff;color:#111;font-size:32px;line-height:1;cursor:pointer;z-index:2;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+      .baked-image-viewer-name{margin-top:12px;color:#fff;font-weight:800;font-size:16px;text-align:center}
+      .product-image img.click-enlarge-image{cursor:zoom-in!important}
+      @media(max-width:600px){#productImageViewer{padding:10px}.baked-image-viewer-img{max-width:96vw;max-height:78vh}.baked-image-viewer-close{top:8px;right:8px;width:42px;height:42px}}
+    `;
+    document.head.appendChild(style);
+    const close=()=>{modal.classList.add('hidden');modal.setAttribute('aria-hidden','true');document.body.style.overflow='';};
+    modal.querySelector('.baked-image-viewer-close').onclick=close;
+    modal.querySelector('.baked-image-viewer-backdrop').onclick=close;
+    return modal;
+  }
+  function openProductImage(src,name){
+    if(!src)return;
+    const modal=ensureProductImageViewer();
+    modal.querySelector('.baked-image-viewer-img').src=src;
+    modal.querySelector('.baked-image-viewer-img').alt=name||'Product image';
+    modal.querySelector('.baked-image-viewer-name').textContent=name||'';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+  }
+  document.addEventListener('click',function(e){
+    const img=e.target.closest('.product-image img');
+    if(!img)return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof e.stopImmediatePropagation==='function')e.stopImmediatePropagation();
+    openProductImage(img.dataset.fullSrc||img.currentSrc||img.src,img.dataset.productName||img.alt||'');
+  },true);
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){
+      const modal=document.getElementById('productImageViewer');
+      if(modal&&!modal.classList.contains('hidden')){
+        modal.classList.add('hidden');modal.setAttribute('aria-hidden','true');document.body.style.overflow='';
+      }
+    }
+  });
 })();
