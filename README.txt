@@ -1,13 +1,12 @@
-BAKED LIVE MENU - MG SELECTION + PACKING SLIP FIX
+BAKED LIVE MENU - MG + PACKING SLIP + IMAGE ENLARGE FIX
 
-Upload/replace app.js in the live menu with this app.js.
+Replace your current app.js with the app.js in this ZIP.
 
-Changes:
-- Detects MG strength options from the product Strength/Description.
-- If multiple MG options exist, customer must choose one before adding to cart.
-- Cart keeps MG attached to the item.
-- Order submission saves an internal MG marker in the order note without showing it as the customer note.
-- Admin Customer Orders shows Product — MG.
-- View / Packing Slip shows Product — MG.
-- Printed packing slip shows Product — MG.
-- Customer-visible WhatsApp/invoice notes remain clean.
+This version keeps the MG selection / packing slip fix and restores click-to-enlarge product images.
+
+Product image viewer:
+- Click any product image to open it large.
+- Click X or outside the image to close it.
+- Press Escape to close it.
+- Works on desktop and mobile.
+- Image clicks no longer trigger the strain/product card action underneath.
