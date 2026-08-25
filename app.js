@@ -175,8 +175,7 @@ function renderProducts(){
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strains=parseStrainList(p.description);
-    const shortDescription=splitProductDescription(p.description).description||'Current live menu item.';
-    const strainSummary=`<p>${escapeHtml(shortDescription)}</p>${strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:''}`;
+    const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
     return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&parseStrainList(p.description).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
@@ -192,15 +191,45 @@ async function loadProducts(){
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
   updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
+function productMgOptions(p){
+  const text=`${p?.strength||''} ${splitProductDescription(p?.description||'').description||''}`;
+  const matches=[...text.matchAll(/\b(\d+(?:\.\d+)?)\s*mg\b/ig)].map(m=>`${m[1]}MG`);
+  return [...new Set(matches.map(x=>x.toUpperCase()))];
+}
+function ensureMgModal(){
+  if(document.getElementById('mgSelectModal'))return;
+  const modal=document.createElement('div');
+  modal.id='mgSelectModal'; modal.className='modal hidden'; modal.setAttribute('aria-hidden','true');
+  modal.innerHTML=`<div class="modal-card" style="max-width:520px"><div class="modal-header"><div><p class="eyebrow accent">EDIBLE STRENGTH</p><h2 id="mgSelectTitle">Choose MG</h2><p id="mgSelectSubtitle">Select the strength required.</p></div><button type="button" class="icon-button" id="mgSelectClose" aria-label="Close">×</button></div><div id="mgSelectOptions" style="display:grid;gap:10px;margin-top:16px"></div></div>`;
+  document.body.appendChild(modal);
+  const close=()=>{modal.classList.add('hidden');modal.setAttribute('aria-hidden','true');if(!document.querySelector('.drawer.open'))$('#drawerBackdrop')?.classList.add('hidden');};
+  $('#mgSelectClose').onclick=close;
+  modal.onclick=e=>{if(e.target===modal)close();};
+}
+function addProductWithMg(p,mg,requestedQuantity=1){
+  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
+  const key=mg?`${p.id}::mg::${mg}`:String(p.id);
+  const item=cart.find(x=>String(x.cartKey||x.id)===key);
+  const existing=item?item.quantity:0;
+  if(existing+amount>p.stock)return toast(`Only ${Math.max(0,p.stock-existing)} more available`);
+  const displayName=mg?`${p.name} — ${mg}`:p.name;
+  if(item)item.quantity+=amount;
+  else cart.push({id:p.id,cartKey:key,name:displayName,parentName:p.name,mg:mg||'',price:Number(p.price),quantity:amount,stock:p.stock});
+  persistCart(); toast(`${amount} × ${displayName} added to cart`);
+}
+function openMgSelector(p,options,requestedQuantity){
+  ensureMgModal();
+  $('#mgSelectTitle').textContent=p.name;
+  $('#mgSelectSubtitle').textContent='Choose the MG strength before adding this product to the cart.';
+  $('#mgSelectOptions').innerHTML=options.map(mg=>`<button type="button" class="btn primary mg-option-button" data-mg="${escapeHtml(mg)}" style="justify-content:center;padding:14px;font-size:16px">${escapeHtml(mg)}</button>`).join('');
+  $$('.mg-option-button').forEach(b=>b.onclick=()=>{addProductWithMg(p,b.dataset.mg,requestedQuantity);$('#mgSelectModal').classList.add('hidden');$('#mgSelectModal').setAttribute('aria-hidden','true');if(!document.querySelector('.drawer.open'))$('#drawerBackdrop')?.classList.add('hidden');});
+  $('#mgSelectModal').classList.remove('hidden'); $('#mgSelectModal').setAttribute('aria-hidden','false'); $('#drawerBackdrop')?.classList.remove('hidden');
+}
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
-  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
-  const item=cart.find(x=>String(x.id)===String(id));
-  const existing=item?item.quantity:0;
-  if(existing+amount>p.stock)return toast(`Only ${p.stock-existing} more available`);
-  if(item)item.quantity+=amount;
-  else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
-  persistCart(); toast(`${amount} × ${p.name} added to cart`);
+  const mgOptions=productMgOptions(p);
+  if(mgOptions.length>1)return openMgSelector(p,mgOptions,requestedQuantity);
+  return addProductWithMg(p,mgOptions[0]||'',requestedQuantity);
 }
 function removeCartItem(key){
   cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
@@ -307,6 +336,25 @@ function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, o
   ].filter(Boolean).join('\n');
 }
 
+function buildMgOrderMarker(items){
+  const rows=items.filter(i=>i.mg).map(i=>`${i.parentName||String(i.name).split(' — ')[0]} = ${i.mg}`);
+  return rows.length?`[[ITEM_MG]]\n${rows.join('\n')}`:'';
+}
+function splitOrderNoteAndMg(note=''){
+  const marker='[[ITEM_MG]]'; const text=String(note||''); const at=text.indexOf(marker);
+  if(at<0)return {note:text.trim(),mgMap:new Map()};
+  const clean=text.slice(0,at).trim(); const block=text.slice(at+marker.length).trim(); const mgMap=new Map();
+  block.split(/\r?\n/).forEach(line=>{const i=line.indexOf('=');if(i<0)return;const name=line.slice(0,i).trim().toLowerCase(),mg=line.slice(i+1).trim();if(name&&mg)mgMap.set(name,mg);});
+  return {note:clean,mgMap};
+}
+function orderItemDisplayName(item,orderNote=''){
+  const base=String(item?.product_name||'Product');
+  if(/\b\d+(?:\.\d+)?\s*mg\b/i.test(base))return base;
+  const {mgMap}=splitOrderNoteAndMg(orderNote);
+  const mg=mgMap.get(base.trim().toLowerCase());
+  return mg?`${base} — ${mg}`:base;
+}
+
 let lastOrderForInvoice=null;
 
 function printInvoice(order=lastOrderForInvoice){
@@ -327,8 +375,10 @@ async function placeOrder(e){
   const btn=$('#placeOrderButton');
   const customerName=$('#customerName').value.trim();
   const customerPhone=LOCKED_ORDER_CONTACT_NUMBER;
-  const note=$('#customerNote').value.trim();
+  const customerNote=$('#customerNote').value.trim();
   const orderedItems=cart.map(item=>({...item}));
+  const mgMarker=buildMgOrderMarker(orderedItems);
+  const note=[customerNote,mgMarker].filter(Boolean).join('\n\n');
 
   // Open a blank tab immediately so browsers do not block WhatsApp after the database request.
   const whatsappWindow=window.open('about:blank','_blank');
@@ -349,10 +399,10 @@ async function placeOrder(e){
       })
     });
 
-    const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
+    const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,customerNote,orderedItems);
     const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
 
-    lastOrderForInvoice={orderNo,customerName,customerPhone,note,items:orderedItems,createdAt:new Date().toISOString()};
+    lastOrderForInvoice={orderNo,customerName,customerPhone,note:customerNote,items:orderedItems,createdAt:new Date().toISOString()};
     const creditUsed=Number(sessionStorage.getItem('baked-credit-use')||0);if(creditUsed>0){const mm=ensureMemberDefaults(getMember());if(mm){mm.storeCredit=Math.max(0,mm.storeCredit-creditUsed);saveMember(mm);}clearMemberCreditUse();}
 
     cart=[];
@@ -492,7 +542,7 @@ async function loadOrders(){
   try{
     const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
     adminOrdersCache=orders||[];
-    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
+    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(orderItemDisplayName(i,o.note))}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
     $$('.view-order-detail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.id));
     $$('.delete-order').forEach(b=>b.onclick=()=>deleteOrder(b.dataset.id,b.dataset.number));
@@ -519,10 +569,10 @@ function openOrderDetail(id){
     <div class="order-detail-table-wrap">
       <table class="order-detail-table">
         <thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
-        <tbody>${items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td>${money(i.unit_price)}</td><td>${money(i.line_total)}</td></tr>`).join('')}</tbody>
+        <tbody>${items.map(i=>`<tr><td>${escapeHtml(orderItemDisplayName(i,order.note))}</td><td>${Number(i.quantity||0)}</td><td>${money(i.unit_price)}</td><td>${money(i.line_total)}</td></tr>`).join('')}</tbody>
       </table>
     </div>
-    ${order.note?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(order.note)}</p></div>`:''}
+    ${splitOrderNoteAndMg(order.note).note?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(splitOrderNoteAndMg(order.note).note)}</p></div>`:''}
     <div class="order-detail-total"><span>Order Total</span><strong>${money(order.total)}</strong></div>`;
   $('#orderDetailModal').classList.remove('hidden');
   $('#orderDetailModal').setAttribute('aria-hidden','false');
@@ -532,7 +582,7 @@ function openOrderDetail(id){
 function printPackingSlip(order=selectedOrderDetail){
   if(!order)return toast('Open an order first');
   const items=order.order_items||[];
-  const rows=items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
+  const rows=items.map(i=>`<tr><td>${escapeHtml(orderItemDisplayName(i,order.note))}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
   const w=window.open('','_blank','width=900,height=800');
   if(!w)return toast('Allow pop-ups to print the packing slip');
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Packing Slip ${escapeHtml(order.order_number)}</title>
@@ -550,7 +600,7 @@ function printPackingSlip(order=selectedOrderDetail){
   <div class="head"><div><div class="brand">BAKED AFRICA</div><div class="sub">ORDER & PACKING SHEET</div></div><div><strong>${escapeHtml(order.order_number)}</strong><div class="sub">${new Date(order.created_at).toLocaleString('en-ZA')}</div></div></div>
   <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>Contact:</strong> ${escapeHtml(order.customer_phone||'')}</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
   <table><thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Packing Qty</th></tr></thead><tbody>${rows}</tbody></table>
-  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(order.note||'')}</div>
+  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(splitOrderNoteAndMg(order.note).note||'')}</div>
   <div class="sign"><div class="line">Packed by / Signature</div><div class="line">Checked by / Signature</div></div>
   <button onclick="window.print()">Print Packing Slip</button>
   </body></html>`);
@@ -1083,99 +1133,3 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js').catch(console.error);
   });
 }
-
-
-/* Customer full-screen product image viewer */
-function openFullProductImage(src,name='Product'){
-  if(!src)return;
-  const viewer=$('#productImageViewer');
-  const img=$('#productImageViewerImg');
-  const label=$('#productImageViewerName');
-  if(!viewer||!img)return;
-  img.src=src;
-  img.alt=name;
-  if(label)label.textContent=name;
-  viewer.classList.remove('hidden');
-  viewer.setAttribute('aria-hidden','false');
-  document.body.classList.add('product-image-viewer-open');
-}
-function closeFullProductImage(){
-  const viewer=$('#productImageViewer');
-  const img=$('#productImageViewerImg');
-  if(!viewer)return;
-  viewer.classList.add('hidden');
-  viewer.setAttribute('aria-hidden','true');
-  document.body.classList.remove('product-image-viewer-open');
-  if(img)img.src='';
-}
-document.addEventListener('click',event=>{
-  const image=event.target.closest('#storeView .product-card .product-image img');
-  if(image){
-    event.preventDefault();
-    event.stopPropagation();
-    const card=image.closest('.product-card');
-    const name=card?.querySelector('h3')?.textContent?.trim() || image.alt || 'Product';
-    openFullProductImage(image.currentSrc||image.src,name);
-    return;
-  }
-  if(event.target.id==='productImageViewer' || event.target.closest('#productImageViewerClose')){
-    closeFullProductImage();
-  }
-});
-document.addEventListener('keydown',event=>{
-  if(event.key==='Escape')closeFullProductImage();
-});
-
-
-/* Baked customer suggestion box */
-async function submitMenuSuggestion(event){
-  event.preventDefault();
-  const suggestion=$('#suggestionText')?.value.trim()||'';
-  const customer_name=$('#suggestionName')?.value.trim()||null;
-  const msg=$('#suggestionMessage');
-  if(suggestion.length<3){if(msg)msg.textContent='Please enter your suggestion.';return;}
-  try{
-    if(msg)msg.textContent='Sending…';
-    await api('/rest/v1/rpc/submit_menu_suggestion',{method:'POST',body:JSON.stringify({p_customer_name:customer_name||'',p_suggestion:suggestion})});
-    if(msg)msg.textContent='Thank you — your suggestion has been sent.';
-    $('#suggestionForm')?.reset();
-    setTimeout(()=>$('#suggestionModal')?.classList.add('hidden'),1300);
-  }catch(err){console.error('Suggestion submit failed',err);if(msg)msg.textContent='Could not send suggestion. Please try again.';}
-}
-async function loadMenuSuggestions(){
-  const list=$('#adminSuggestions'),msg=$('#suggestionsAdminMessage');
-  if(!list)return;
-  try{
-    if(msg)msg.textContent='Loading…';
-    const rows=await api('/rest/v1/rpc/get_menu_suggestions',{method:'POST',auth:true,body:'{}'});
-    $('#suggestionAdminCount').textContent=rows.length?`(${rows.filter(x=>x.status==='New').length})`:'';
-    list.innerHTML=rows.length?rows.map(x=>`<div class="suggestion-admin-item">
-      <div><strong>${escapeHtml(x.customer_name||'Anonymous')}</strong><small>${new Date(x.created_at).toLocaleString('en-ZA')}</small></div>
-      <p>${escapeHtml(x.suggestion)}</p>
-      <div class="suggestion-admin-actions">
-        <select data-suggestion-status="${x.id}"><option ${x.status==='New'?'selected':''}>New</option><option ${x.status==='Reviewed'?'selected':''}>Reviewed</option><option ${x.status==='Done'?'selected':''}>Done</option></select>
-        <button class="btn danger compact" data-delete-suggestion="${x.id}" type="button">Delete</button>
-      </div></div>`).join(''):'<div class="empty-state">No customer suggestions yet.</div>';
-    if(msg)msg.textContent='';
-  }catch(err){if(msg)msg.textContent='Could not load suggestions.';}
-}
-async function updateSuggestionStatus(id,status){
-  await api('/rest/v1/rpc/set_menu_suggestion_status',{method:'POST',auth:true,body:JSON.stringify({p_id:Number(id),p_status:status})});
-  loadMenuSuggestions();
-}
-async function deleteSuggestion(id){
-  if(!confirm('Delete this suggestion?'))return;
-  await api('/rest/v1/rpc/delete_menu_suggestion',{method:'POST',auth:true,body:JSON.stringify({p_id:Number(id)})});
-  loadMenuSuggestions();
-}
-document.addEventListener('click',e=>{
-  if(e.target.closest('#openSuggestionBox')){$('#suggestionModal')?.classList.remove('hidden');}
-  if(e.target.closest('#closeSuggestionBox')||e.target.id==='suggestionModal'){$('#suggestionModal')?.classList.add('hidden');}
-  const del=e.target.closest('[data-delete-suggestion]');if(del)deleteSuggestion(del.dataset.deleteSuggestion);
-});
-document.addEventListener('change',e=>{
-  if(e.target.matches('[data-suggestion-status]'))updateSuggestionStatus(e.target.dataset.suggestionStatus,e.target.value);
-});
-document.addEventListener('submit',e=>{if(e.target?.id==='suggestionForm')submitMenuSuggestion(e);});
-$('#refreshSuggestionsButton')?.addEventListener('click',loadMenuSuggestions);
-document.addEventListener('click',e=>{if(e.target.closest('.admin-tab[data-tab="suggestions"]'))setTimeout(loadMenuSuggestions,0);});
