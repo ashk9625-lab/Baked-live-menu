@@ -128,9 +128,16 @@ function composeProductDescription(normalDescription='',strainText=''){
   if(!strains.length)return cleanDesc;
   return `${cleanDesc}${cleanDesc?'\n\n':''}[[STRAINS]]\n${strains.map(s=>`${s.name} = ${s.qty}`).join('\n')}`;
 }
+function supportsStrainSelection(p){
+  const category=String(p?.category||'').toLowerCase().replace(/[^a-z]/g,'');
+  return category.includes('preroll')||category.includes('flower');
+}
+function selectableStrains(p){
+  return supportsStrainSelection(p)?parseStrainList(p?.description):[];
+}
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
-  const strains=parseStrainList(p.description);
+  const strains=selectableStrains(p);
   if(!strains.length)return;
   $('#strainModalTitle').textContent=p.name;
   $('#strainModalSubtitle').textContent='Choose a strain and quantity';
@@ -173,12 +180,12 @@ function renderProducts(){
   });
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
-    const [state,label]=stockState(p), img=p.image_url?`<img class="click-enlarge-image" data-full-src="${escapeHtml(p.image_url)}" data-product-name="${escapeHtml(p.name)}" src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
-    const strains=parseStrainList(p.description);
+    const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
+    const strains=selectableStrains(p);
     const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
     return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
-  $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&parseStrainList(p.description).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
+  $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&selectableStrains(p).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
   $$('.product-quantity').forEach(i=>i.onclick=e=>e.stopPropagation());
   $$('.view-strains').forEach(b=>b.onclick=e=>{e.stopPropagation();openStrainModal(b.dataset.id);});
   $$('.product-card.has-strains').forEach(card=>card.onclick=()=>openStrainModal(card.dataset.strainCard));
@@ -191,45 +198,15 @@ async function loadProducts(){
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
   updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
-function productMgOptions(p){
-  const text=`${p?.strength||''} ${splitProductDescription(p?.description||'').description||''}`;
-  const matches=[...text.matchAll(/\b(\d+(?:\.\d+)?)\s*mg\b/ig)].map(m=>`${m[1]}MG`);
-  return [...new Set(matches.map(x=>x.toUpperCase()))];
-}
-function ensureMgModal(){
-  if(document.getElementById('mgSelectModal'))return;
-  const modal=document.createElement('div');
-  modal.id='mgSelectModal'; modal.className='modal hidden'; modal.setAttribute('aria-hidden','true');
-  modal.innerHTML=`<div class="modal-card" style="max-width:520px"><div class="modal-header"><div><p class="eyebrow accent">EDIBLE STRENGTH</p><h2 id="mgSelectTitle">Choose MG</h2><p id="mgSelectSubtitle">Select the strength required.</p></div><button type="button" class="icon-button" id="mgSelectClose" aria-label="Close">×</button></div><div id="mgSelectOptions" style="display:grid;gap:10px;margin-top:16px"></div></div>`;
-  document.body.appendChild(modal);
-  const close=()=>{modal.classList.add('hidden');modal.setAttribute('aria-hidden','true');if(!document.querySelector('.drawer.open'))$('#drawerBackdrop')?.classList.add('hidden');};
-  $('#mgSelectClose').onclick=close;
-  modal.onclick=e=>{if(e.target===modal)close();};
-}
-function addProductWithMg(p,mg,requestedQuantity=1){
-  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
-  const key=mg?`${p.id}::mg::${mg}`:String(p.id);
-  const item=cart.find(x=>String(x.cartKey||x.id)===key);
-  const existing=item?item.quantity:0;
-  if(existing+amount>p.stock)return toast(`Only ${Math.max(0,p.stock-existing)} more available`);
-  const displayName=mg?`${p.name} — ${mg}`:p.name;
-  if(item)item.quantity+=amount;
-  else cart.push({id:p.id,cartKey:key,name:displayName,parentName:p.name,mg:mg||'',price:Number(p.price),quantity:amount,stock:p.stock});
-  persistCart(); toast(`${amount} × ${displayName} added to cart`);
-}
-function openMgSelector(p,options,requestedQuantity){
-  ensureMgModal();
-  $('#mgSelectTitle').textContent=p.name;
-  $('#mgSelectSubtitle').textContent='Choose the MG strength before adding this product to the cart.';
-  $('#mgSelectOptions').innerHTML=options.map(mg=>`<button type="button" class="btn primary mg-option-button" data-mg="${escapeHtml(mg)}" style="justify-content:center;padding:14px;font-size:16px">${escapeHtml(mg)}</button>`).join('');
-  $$('.mg-option-button').forEach(b=>b.onclick=()=>{addProductWithMg(p,b.dataset.mg,requestedQuantity);$('#mgSelectModal').classList.add('hidden');$('#mgSelectModal').setAttribute('aria-hidden','true');if(!document.querySelector('.drawer.open'))$('#drawerBackdrop')?.classList.add('hidden');});
-  $('#mgSelectModal').classList.remove('hidden'); $('#mgSelectModal').setAttribute('aria-hidden','false'); $('#drawerBackdrop')?.classList.remove('hidden');
-}
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
-  const mgOptions=productMgOptions(p);
-  if(mgOptions.length>1)return openMgSelector(p,mgOptions,requestedQuantity);
-  return addProductWithMg(p,mgOptions[0]||'',requestedQuantity);
+  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
+  const item=cart.find(x=>String(x.id)===String(id));
+  const existing=item?item.quantity:0;
+  if(existing+amount>p.stock)return toast(`Only ${p.stock-existing} more available`);
+  if(item)item.quantity+=amount;
+  else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
+  persistCart(); toast(`${amount} × ${p.name} added to cart`);
 }
 function removeCartItem(key){
   cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
@@ -336,25 +313,6 @@ function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, o
   ].filter(Boolean).join('\n');
 }
 
-function buildMgOrderMarker(items){
-  const rows=items.filter(i=>i.mg).map(i=>`${i.parentName||String(i.name).split(' — ')[0]} = ${i.mg}`);
-  return rows.length?`[[ITEM_MG]]\n${rows.join('\n')}`:'';
-}
-function splitOrderNoteAndMg(note=''){
-  const marker='[[ITEM_MG]]'; const text=String(note||''); const at=text.indexOf(marker);
-  if(at<0)return {note:text.trim(),mgMap:new Map()};
-  const clean=text.slice(0,at).trim(); const block=text.slice(at+marker.length).trim(); const mgMap=new Map();
-  block.split(/\r?\n/).forEach(line=>{const i=line.indexOf('=');if(i<0)return;const name=line.slice(0,i).trim().toLowerCase(),mg=line.slice(i+1).trim();if(name&&mg)mgMap.set(name,mg);});
-  return {note:clean,mgMap};
-}
-function orderItemDisplayName(item,orderNote=''){
-  const base=String(item?.product_name||'Product');
-  if(/\b\d+(?:\.\d+)?\s*mg\b/i.test(base))return base;
-  const {mgMap}=splitOrderNoteAndMg(orderNote);
-  const mg=mgMap.get(base.trim().toLowerCase());
-  return mg?`${base} — ${mg}`:base;
-}
-
 let lastOrderForInvoice=null;
 
 function printInvoice(order=lastOrderForInvoice){
@@ -375,10 +333,8 @@ async function placeOrder(e){
   const btn=$('#placeOrderButton');
   const customerName=$('#customerName').value.trim();
   const customerPhone=LOCKED_ORDER_CONTACT_NUMBER;
-  const customerNote=$('#customerNote').value.trim();
+  const note=$('#customerNote').value.trim();
   const orderedItems=cart.map(item=>({...item}));
-  const mgMarker=buildMgOrderMarker(orderedItems);
-  const note=[customerNote,mgMarker].filter(Boolean).join('\n\n');
 
   // Open a blank tab immediately so browsers do not block WhatsApp after the database request.
   const whatsappWindow=window.open('about:blank','_blank');
@@ -399,10 +355,10 @@ async function placeOrder(e){
       })
     });
 
-    const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,customerNote,orderedItems);
+    const message=buildWhatsAppOrderMessage(orderNo,customerName,customerPhone,note,orderedItems);
     const whatsappUrl=`https://wa.me/${WHATSAPP_ORDER_NUMBER}?text=${encodeURIComponent(message)}`;
 
-    lastOrderForInvoice={orderNo,customerName,customerPhone,note:customerNote,items:orderedItems,createdAt:new Date().toISOString()};
+    lastOrderForInvoice={orderNo,customerName,customerPhone,note,items:orderedItems,createdAt:new Date().toISOString()};
     const creditUsed=Number(sessionStorage.getItem('baked-credit-use')||0);if(creditUsed>0){const mm=ensureMemberDefaults(getMember());if(mm){mm.storeCredit=Math.max(0,mm.storeCredit-creditUsed);saveMember(mm);}clearMemberCreditUse();}
 
     cart=[];
@@ -445,7 +401,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); await updateAdminAlerts(); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -536,113 +492,14 @@ async function adjustStock(e){
   e.preventDefault(); $('#stockFormMessage').textContent='Updating…';
   try{ await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:$('#stockProductId').value,p_quantity:Number($('#stockQuantity').value),p_reference:$('#stockReference').value.trim()})}); closeOverlays();toast('Stock updated');await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]); }catch(err){ $('#stockFormMessage').textContent=err.message; }
 }
-let adminOrdersCache=[];
-
 async function loadOrders(){
   try{
     const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
-    adminOrdersCache=orders||[];
-    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(orderItemDisplayName(i,o.note))}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
+    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
-    $$('.view-order-detail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.id));
     $$('.delete-order').forEach(b=>b.onclick=()=>deleteOrder(b.dataset.id,b.dataset.number));
-    updateAdminAlerts();
   }catch(err){$('#adminOrders').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
-
-
-let selectedOrderDetail=null;
-
-function openOrderDetail(id){
-  const order=adminOrdersCache.find(o=>String(o.id)===String(id));
-  if(!order)return toast('Order could not be found');
-  selectedOrderDetail=order;
-  $('#orderDetailTitle').textContent=order.order_number;
-  const items=order.order_items||[];
-  $('#orderDetailContent').innerHTML=`
-    <div class="order-detail-meta">
-      <div><span>Customer</span><strong>${escapeHtml(order.customer_name||'')}</strong></div>
-      <div><span>Contact</span><strong>${escapeHtml(order.customer_phone||'')}</strong></div>
-      <div><span>Date</span><strong>${new Date(order.created_at).toLocaleString('en-ZA')}</strong></div>
-      <div><span>Status</span><strong>${escapeHtml(order.status||'Pending')}</strong></div>
-    </div>
-    <div class="order-detail-table-wrap">
-      <table class="order-detail-table">
-        <thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
-        <tbody>${items.map(i=>`<tr><td>${escapeHtml(orderItemDisplayName(i,order.note))}</td><td>${Number(i.quantity||0)}</td><td>${money(i.unit_price)}</td><td>${money(i.line_total)}</td></tr>`).join('')}</tbody>
-      </table>
-    </div>
-    ${splitOrderNoteAndMg(order.note).note?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(splitOrderNoteAndMg(order.note).note)}</p></div>`:''}
-    <div class="order-detail-total"><span>Order Total</span><strong>${money(order.total)}</strong></div>`;
-  $('#orderDetailModal').classList.remove('hidden');
-  $('#orderDetailModal').setAttribute('aria-hidden','false');
-  $('#drawerBackdrop').classList.remove('hidden');
-}
-
-function printPackingSlip(order=selectedOrderDetail){
-  if(!order)return toast('Open an order first');
-  const items=order.order_items||[];
-  const rows=items.map(i=>`<tr><td>${escapeHtml(orderItemDisplayName(i,order.note))}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
-  const w=window.open('','_blank','width=900,height=800');
-  if(!w)return toast('Allow pop-ups to print the packing slip');
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Packing Slip ${escapeHtml(order.order_number)}</title>
-  <style>
-  body{font-family:Arial,sans-serif;color:#111;padding:35px;max-width:900px;margin:auto}
-  .head{display:flex;justify-content:space-between;gap:30px;border-bottom:3px solid #111;padding-bottom:18px;margin-bottom:22px}
-  .brand{font-size:27px;font-weight:900}.sub{color:#666;font-size:12px;margin-top:4px}
-  .info{display:grid;grid-template-columns:1fr 1fr;gap:8px 30px;margin:20px 0}.info div{border-bottom:1px solid #ddd;padding:8px 0}
-  table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #bbb;padding:13px;text-align:left}th{background:#f1f1f1}
-  th:nth-child(2),td:nth-child(2){width:110px;text-align:center}th:nth-child(3),td:nth-child(3){width:150px;text-align:center}
-  .packing-box{height:34px}.notes{margin-top:20px;border:1px solid #ccc;padding:14px;min-height:55px}
-  .sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:55px}.line{border-top:1px solid #111;padding-top:7px;font-size:12px}
-  button{margin-top:25px;padding:10px 18px}@media print{button{display:none}body{padding:5px}}
-  </style></head><body>
-  <div class="head"><div><div class="brand">BAKED AFRICA</div><div class="sub">ORDER & PACKING SHEET</div></div><div><strong>${escapeHtml(order.order_number)}</strong><div class="sub">${new Date(order.created_at).toLocaleString('en-ZA')}</div></div></div>
-  <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>Contact:</strong> ${escapeHtml(order.customer_phone||'')}</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
-  <table><thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Packing Qty</th></tr></thead><tbody>${rows}</tbody></table>
-  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(splitOrderNoteAndMg(order.note).note||'')}</div>
-  <div class="sign"><div class="line">Packed by / Signature</div><div class="line">Checked by / Signature</div></div>
-  <button onclick="window.print()">Print Packing Slip</button>
-  </body></html>`);
-  w.document.close();w.focus();setTimeout(()=>w.print(),250);
-}
-
-async function updateAdminAlerts(){
-  if(!accessToken)return;
-  try{
-    if(!adminOrdersCache.length){
-      try{adminOrdersCache=await api('/rest/v1/orders?select=id,order_number,customer_name,status,total,created_at&order=created_at.desc&limit=100',{auth:true})||[]}catch{}
-    }
-    let alertProducts=products;
-    if(!alertProducts?.length){
-      try{alertProducts=await api('/rest/v1/products?select=id,name,stock,reorder_level,description,active&active=eq.true',{auth:true})||[]}catch{alertProducts=[]}
-    }
-    const pending=adminOrdersCache.filter(o=>String(o.status||'Pending')==='Pending');
-    const rows=stockDashFlatten(alertProducts||[]);
-    const out=rows.filter(r=>r.qty<=0);
-    const low=rows.filter(r=>r.qty>0&&r.qty<=r.reorder);
-    const total=pending.length+out.length+low.length;
-    const badge=$('#adminAlertCount');
-    if(badge){badge.textContent=total;badge.classList.toggle('hidden',total===0)}
-    if($('#alertNewOrders'))$('#alertNewOrders').textContent=pending.length;
-    if($('#alertLowStock'))$('#alertLowStock').textContent=low.length;
-    if($('#alertOutStock'))$('#alertOutStock').textContent=out.length;
-    const alerts=[];
-    pending.slice(0,10).forEach(o=>alerts.push({type:'order',level:'order',title:`New order ${o.order_number}`,text:`${o.customer_name||'Customer'} · ${money(o.total||0)}`}));
-    out.slice(0,15).forEach(r=>alerts.push({type:'stock',level:'out',title:'Out of stock',text:r.name}));
-    low.slice(0,15).forEach(r=>alerts.push({type:'stock',level:'low',title:'Low stock',text:`${r.name} · ${r.qty} remaining`}));
-    const list=$('#adminAlertsList');
-    if(list)list.innerHTML=alerts.length?alerts.map(a=>`<article class="admin-alert-item ${a.level}"><span class="admin-alert-dot"></span><div><strong>${escapeHtml(a.title)}</strong><small>${escapeHtml(a.text)}</small></div></article>`).join(''):'<div class="alerts-clear"><strong>All clear</strong><span>No active order or stock alerts.</span></div>';
-  }catch(e){console.warn('Could not update admin alerts',e)}
-}
-
-function openAdminAlerts(){
-  updateAdminAlerts();
-  $('#adminAlertsModal').classList.remove('hidden');
-  $('#adminAlertsModal').setAttribute('aria-hidden','false');
-  $('#drawerBackdrop').classList.remove('hidden');
-}
-
 async function setOrderStatus(id,status){ try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:status})});toast('Order status updated');await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);}catch(err){toast(err.message);await loadOrders();} }
 async function deleteOrder(id,number){
   if(!confirm(`Permanently delete order ${number}?\n\nThis cannot be undone and will not change current stock.`))return;
@@ -817,142 +674,12 @@ function renderFeaturedProducts(){
   const featured=products.filter(p=>p.featured&&p.active);
   section.classList.toggle('hidden',featured.length===0);
   grid.innerHTML=featured.map(p=>{const [state,label]=stockState(p),img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}">`:`<div class="placeholder">${initials(p.name)}</div>`;return `<article class="product-card featured-card"><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><p class="eyebrow accent">FEATURED</p><h3>${escapeHtml(p.name)}</h3><div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity featured-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" ${p.stock<=0||!orderingAllowed()?'disabled':''}><button class="btn primary featured-add" data-id="${p.id}" ${p.stock<=0||!orderingAllowed()?'disabled':''}>${orderingAllowed()?'Add':'Closed'}</button></div></div></div></article>`}).join('');
-  $$('.featured-add').forEach(b=>b.onclick=()=>{const p=products.find(x=>String(x.id)===String(b.dataset.id));if(p&&parseStrainList(p.description).length)return openStrainModal(p.id);addToCart(b.dataset.id,Number(document.querySelector(`.featured-quantity[data-id="${b.dataset.id}"]`)?.value||1));});
+  $$('.featured-add').forEach(b=>b.onclick=()=>{const p=products.find(x=>String(x.id)===String(b.dataset.id));if(p&&selectableStrains(p).length)return openStrainModal(p.id);addToCart(b.dataset.id,Number(document.querySelector(`.featured-quantity[data-id="${b.dataset.id}"]`)?.value||1));});
 }
 async function toggleFeatured(id,current){try{await api(`/rest/v1/products?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({featured:!current,updated_at:new Date().toISOString()})});toast(!current?'Product featured':'Product unfeatured');await Promise.all([loadAdminProducts(),loadProducts()])}catch(err){toast(err.message)}}
 function compressImage(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=900,scale=Math.min(1,max/Math.max(img.width,img.height)),canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.78))};img.src=reader.result};reader.readAsDataURL(file)})}
 
-
-
-let stockDashboardRows=[];
-let stockDashboardMovements=[];
-function stockDashParseStrains(product){
-  const d=String(product.description||'');if(!d.includes('[[STRAINS]]'))return [];
-  return d.split('[[STRAINS]]')[1].split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(line=>{const i=line.lastIndexOf('=');if(i<1)return null;const name=line.slice(0,i).trim(),qty=Number(line.slice(i+1).trim());return Number.isFinite(qty)?{name,qty}:null}).filter(Boolean);
-}
-function stockDashFlatten(products){
-  const rows=[];(products||[]).forEach(p=>{const strains=stockDashParseStrains(p);if(strains.length){strains.forEach(s=>rows.push({productId:p.id,product:p.name,name:`${p.name} — ${s.name}`,strain:s.name,qty:s.qty,price:Number(p.price||0),reorder:Number(p.reorder_level||5),isStrain:true}))}else rows.push({productId:p.id,product:p.name,name:p.name,strain:'',qty:Number(p.stock||0),price:Number(p.price||0),reorder:Number(p.reorder_level||5),isStrain:false})});return rows;
-}
-function stockDashStatus(r){return r.qty<=0?'out':r.qty<=r.reorder?'low':'ok'}
-function stockDashStatusLabel(r){const s=stockDashStatus(r);return s==='out'?'OUT OF STOCK':s==='low'?'LOW STOCK':'IN STOCK'}
-async function loadStockDashboard(){
- const msg=$('#stockDashboardMessage');if(msg)msg.textContent='Loading stock…';
- try{
-  const [products,movements]=await Promise.all([api('/rest/v1/products?select=id,name,price,stock,reorder_level,description,active&active=eq.true&order=name.asc',{auth:true}),api('/rest/v1/stock_movements?select=id,product_id,movement_type,quantity,reference,created_at,products(name)&order=created_at.desc&limit=100',{auth:true})]);
-  stockDashboardRows=stockDashFlatten(products);stockDashboardMovements=movements||[];renderStockDashboard();if(msg)msg.textContent='';
- }catch(err){if(msg)msg.textContent=err.message;$('#stockDashboardBody').innerHTML=`<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`}
-}
-function renderStockDashboard(){
- const q=($('#sdSearch')?.value||'').trim().toLowerCase(),filter=$('#sdStatus')?.value||'all';
- const rows=stockDashboardRows.filter(r=>(!q||r.name.toLowerCase().includes(q))&&(filter==='all'||stockDashStatus(r)===filter));
- $('#sdTotalUnits').textContent=stockDashboardRows.reduce((s,r)=>s+r.qty,0);
- $('#sdLowStock').textContent=stockDashboardRows.filter(r=>stockDashStatus(r)==='low').length;
- $('#sdOutStock').textContent=stockDashboardRows.filter(r=>stockDashStatus(r)==='out').length;
- $('#sdStockValue').textContent=money(stockDashboardRows.reduce((s,r)=>s+r.qty*r.price,0));
- $('#stockDashboardBody').innerHTML=rows.length?rows.map((r,i)=>`<tr data-sd-index="${stockDashboardRows.indexOf(r)}"><td><strong>${escapeHtml(r.name)}</strong>${r.isStrain?'<small class="sd-sub">Strain stock</small>':''}</td><td>${money(r.price)}</td><td><strong>${r.qty}</strong></td><td><span class="sd-badge ${stockDashStatus(r)}">${stockDashStatusLabel(r)}</span></td><td><input class="sd-count" type="number" min="0" placeholder="Count" data-sd-count="${stockDashboardRows.indexOf(r)}"></td><td><strong class="sd-diff" data-sd-diff="${stockDashboardRows.indexOf(r)}">—</strong></td><td><button class="btn ghost sd-apply" type="button" data-sd-apply="${stockDashboardRows.indexOf(r)}">Apply count</button></td></tr>`).join(''):'<tr><td colspan="7">No stock matches this filter.</td></tr>';
- $$('.sd-count').forEach(el=>el.oninput=()=>{const r=stockDashboardRows[Number(el.dataset.sdCount)],v=el.value===''?null:Number(el.value),d=$(`[data-sd-diff="${el.dataset.sdCount}"]`);d.textContent=v===null?'—':`${v-r.qty>=0?'+':''}${v-r.qty}`});
- $$('.sd-apply').forEach(b=>b.onclick=()=>applyPhysicalCount(Number(b.dataset.sdApply)));
- $('#stockDashboardHistory').innerHTML=stockDashboardMovements.length?stockDashboardMovements.slice(0,30).map(m=>`<article class="sales-recent-row"><div><strong>${escapeHtml(m.products?.name||'Product')}</strong><small>${new Date(m.created_at).toLocaleString('en-ZA')} · ${escapeHtml(m.movement_type||'ADJUSTMENT')}</small></div><div><strong>${Number(m.quantity)>=0?'+':''}${Number(m.quantity||0)}</strong><small>${escapeHtml(m.reference||'No reference')}</small></div></article>`).join(''):'<div class="empty-state"><h3>No stock movements yet</h3></div>';
-}
-async function applyPhysicalCount(i){
- const r=stockDashboardRows[i],input=$(`[data-sd-count="${i}"]`);if(!r||!input||input.value==='')return toast('Enter the physical count first');const count=Number(input.value);if(!Number.isInteger(count)||count<0)return toast('Enter a valid whole-number count');
- if(!confirm(`Set ${r.name} stock from ${r.qty} to ${count}?`))return;
- const msg=$('#stockDashboardMessage');msg.textContent='Applying stock count…';
- try{
-  if(r.isStrain){await api('/rest/v1/rpc/stocktake_strain_admin',{method:'POST',auth:true,body:{p_product_id:r.productId,p_strain:r.strain,p_count:count,p_reference:'Physical Stock Count'}})}
-  else{const diff=count-r.qty;if(diff!==0)await adjustStockDirect(r.productId,diff,'Physical Stock Count')}
-  toast('Stock count applied');await Promise.all([loadStockDashboard(),loadInventory(),loadProducts()]);
- }catch(err){msg.textContent=err.message;toast('Stock count failed')}
-}
-function exportStockDashboardCsv(){
- const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`,lines=[['Product / Strain','Price','System Stock','Reorder Level','Status','Retail Stock Value'].map(esc).join(',')];stockDashboardRows.forEach(r=>lines.push([r.name,r.price.toFixed(2),r.qty,r.reorder,stockDashStatusLabel(r),(r.qty*r.price).toFixed(2)].map(esc).join(',')));const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-stock-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
-}
-
-let salesOrdersCache=[];
-let salesRowsCache=[];
-
-function salesPeriodStart(period){
-  const now=new Date();
-  if(period==='all')return null;
-  if(period==='today'){
-    const d=new Date(now);d.setHours(0,0,0,0);return d;
-  }
-  const days=Math.max(1,Number(period)||7);
-  return new Date(now.getTime()-(days*24*60*60*1000));
-}
-function salesOrderIncluded(order){
-  const status=$('#salesStatus')?.value||'active';
-  if(status==='active')return String(order.status||'Pending').toLowerCase()!=='cancelled';
-  return String(order.status||'Pending')===status;
-}
-function salesTextMatch(value){
-  const q=($('#salesSearch')?.value||'').trim().toLowerCase();
-  return !q||String(value||'').toLowerCase().includes(q);
-}
-function buildSalesRows(orders){
-  const map=new Map();
-  orders.forEach(order=>{
-    (order.order_items||[]).forEach(item=>{
-      const name=String(item.product_name||'Product').trim();
-      if(!salesTextMatch(name))return;
-      const key=name.toLowerCase();
-      const qty=Number(item.quantity||0);
-      const value=Number(item.line_total||0);
-      if(!map.has(key))map.set(key,{name,qty:0,value:0,orders:new Set()});
-      const row=map.get(key);row.qty+=qty;row.value+=value;row.orders.add(order.id);
-    });
-  });
-  return [...map.values()].map(r=>({...r,orderCount:r.orders.size})).sort((a,b)=>b.qty-a.qty||b.value-a.value);
-}
-async function loadSales(){
-  const msg=$('#salesMessage');if(msg)msg.textContent='Loading sales…';
-  try{
-    const period=$('#salesPeriod')?.value||'7';
-    const start=salesPeriodStart(period);
-    let path='/rest/v1/orders?select=id,order_number,customer_name,status,total,created_at,order_items(id,product_name,quantity,unit_price,line_total)&order=created_at.desc&limit=1000';
-    if(start)path+=`&created_at=gte.${encodeURIComponent(start.toISOString())}`;
-    const orders=await api(path,{auth:true});
-    salesOrdersCache=(orders||[]).filter(salesOrderIncluded);
-    salesRowsCache=buildSalesRows(salesOrdersCache);
-    renderSalesDashboard();
-    if(msg)msg.textContent='';
-  }catch(err){
-    if(msg)msg.textContent=err.message;
-    $('#salesProductsBody').innerHTML=`<tr><td colspan="4">${escapeHtml(err.message)}</td></tr>`;
-  }
-}
-function renderSalesDashboard(){
-  const rows=salesRowsCache;
-  const visibleOrders=salesOrdersCache.filter(order=>{
-    if(!salesTextMatch(order.order_number)&&!salesTextMatch(order.customer_name)){
-      return (order.order_items||[]).some(i=>salesTextMatch(i.product_name));
-    }
-    return true;
-  });
-  const revenue=visibleOrders.reduce((sum,o)=>sum+Number(o.total||0),0);
-  const units=rows.reduce((sum,r)=>sum+r.qty,0);
-  const top=rows[0];
-  $('#salesRevenue').textContent=money(revenue);
-  $('#salesOrderCount').textContent=visibleOrders.length;
-  $('#salesUnits').textContent=units;
-  $('#salesTopProduct').textContent=top?top.name:'—';
-  $('#salesTopProductQty').textContent=top?`${top.qty} unit${top.qty===1?'':'s'} sold`:'No sales yet';
-  $('#salesProductsBody').innerHTML=rows.length?rows.map(r=>`<tr><td><strong>${escapeHtml(r.name)}</strong></td><td>${r.qty}</td><td>${money(r.value)}</td><td>${r.orderCount}</td></tr>`).join(''):'<tr><td colspan="4">No matching sales in this period.</td></tr>';
-  $('#salesRecent').innerHTML=visibleOrders.length?visibleOrders.slice(0,20).map(o=>{
-    const units=(o.order_items||[]).reduce((s,i)=>s+Number(i.quantity||0),0);
-    return `<article class="sales-recent-row"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')} · ${escapeHtml(o.customer_name||'Customer')}</small></div><div><span class="sales-status">${escapeHtml(o.status||'Pending')}</span><strong>${units} unit${units===1?'':'s'} · ${money(o.total)}</strong></div></article>`;
-  }).join(''):'<div class="empty-state"><h3>No sales yet</h3><p>Orders in the selected period will appear here.</p></div>';
-}
-function exportSalesCsv(){
-  if(!salesRowsCache.length)return toast('No sales to export');
-  const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
-  const lines=[['Product / Strain','Quantity Sold','Sales Value','Orders'].map(esc).join(',')];
-  salesRowsCache.forEach(r=>lines.push([r.name,r.qty,r.value.toFixed(2),r.orderCount].map(esc).join(',')));
-  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-sales-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
-}
-
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); }
 
 function luhnValidSouthAfricanId(idNumber){
   if(!/^\d{13}$/.test(idNumber)) return false;
@@ -1059,20 +786,6 @@ function runSurpriseMe(){
 $('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
 $('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
-if($('#refreshSalesButton'))$('#refreshSalesButton').onclick=loadSales;
-if($('#salesPeriod'))$('#salesPeriod').onchange=loadSales;
-if($('#salesStatus'))$('#salesStatus').onchange=loadSales;
-if($('#salesSearch'))$('#salesSearch').oninput=()=>{salesRowsCache=buildSalesRows(salesOrdersCache);renderSalesDashboard();};
-if($('#exportSalesButton'))$('#exportSalesButton').onclick=exportSalesCsv;
-if($('#refreshStockDashboard'))$('#refreshStockDashboard').onclick=loadStockDashboard;
-if($('#exportStockDashboard'))$('#exportStockDashboard').onclick=exportStockDashboardCsv;
-if($('#sdSearch'))$('#sdSearch').oninput=renderStockDashboard;
-if($('#sdStatus'))$('#sdStatus').onchange=renderStockDashboard;
-if($('#adminAlertsButton'))$('#adminAlertsButton').onclick=openAdminAlerts;
-if($('#printPackingSlipButton'))$('#printPackingSlipButton').onclick=()=>printPackingSlip();
-if($('#alertsGoOrders'))$('#alertsGoOrders').onclick=()=>{closeOverlays();switchAdminTab('orders');};
-if($('#alertsGoStock'))$('#alertsGoStock').onclick=()=>{closeOverlays();switchAdminTab('stockdashboard');};
-
 ['searchInput','categoryFilter','stockFilter'].forEach(id=>$('#'+id).addEventListener('input',()=>{if(id==='categoryFilter')buildFilters();renderProducts();}));
 $$('#vaultGrid .vault-card').forEach(card=>card.addEventListener('click',()=>setVaultFilter(card.dataset.vault)));
 $('#clearVaultFilter')?.addEventListener('click',()=>setVaultFilter('all'));
@@ -1133,131 +846,3 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js').catch(console.error);
   });
 }
-
-/* ===== PRODUCT IMAGE FULLSCREEN VIEWER ===== */
-(function(){
-  function ensureProductImageViewer(){
-    let viewer=document.getElementById('productImageViewer');
-    if(viewer)return viewer;
-    viewer=document.createElement('div');
-    viewer.id='productImageViewer';
-    viewer.setAttribute('aria-hidden','true');
-    viewer.innerHTML=`
-      <div class="baked-image-viewer-backdrop" data-image-viewer-close></div>
-      <div class="baked-image-viewer-dialog" role="dialog" aria-modal="true" aria-label="Product image">
-        <button type="button" class="baked-image-viewer-close" data-image-viewer-close aria-label="Close image">×</button>
-        <img id="productImageViewerImg" alt="Product image">
-        <div id="productImageViewerCaption" class="baked-image-viewer-caption"></div>
-      </div>`;
-    const style=document.createElement('style');
-    style.textContent=`
-      #productImageViewer{position:fixed;inset:0;z-index:999999;display:none;align-items:center;justify-content:center;padding:22px;box-sizing:border-box}
-      #productImageViewer.open{display:flex}
-      #productImageViewer .baked-image-viewer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.88)}
-      #productImageViewer .baked-image-viewer-dialog{position:relative;z-index:1;max-width:min(92vw,1100px);max-height:92vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
-      #productImageViewer img{display:block;max-width:92vw;max-height:82vh;width:auto;height:auto;object-fit:contain;background:#fff;border-radius:16px;box-shadow:0 20px 70px rgba(0,0,0,.45)}
-      #productImageViewer .baked-image-viewer-close{position:absolute;right:-14px;top:-14px;width:44px;height:44px;border:0;border-radius:999px;background:#fff;color:#111;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 5px 20px rgba(0,0,0,.35);z-index:2}
-      #productImageViewer .baked-image-viewer-caption{color:#fff;font-weight:800;font-size:16px;text-align:center;margin-top:12px;text-shadow:0 1px 2px #000}
-      .product-image img,.featured-card .product-image img,.surprise-image img{cursor:zoom-in}
-      @media(max-width:600px){#productImageViewer{padding:12px}#productImageViewer img{max-width:96vw;max-height:80vh;border-radius:12px}#productImageViewer .baked-image-viewer-close{right:0;top:-52px}}
-    `;
-    document.head.appendChild(style);
-    document.body.appendChild(viewer);
-    viewer.querySelectorAll('[data-image-viewer-close]').forEach(el=>el.addEventListener('click',closeProductImageViewer));
-    return viewer;
-  }
-  function openProductImageViewer(img){
-    if(!img||!img.src)return;
-    const viewer=ensureProductImageViewer();
-    const full=viewer.querySelector('#productImageViewerImg');
-    const caption=viewer.querySelector('#productImageViewerCaption');
-    full.src=img.currentSrc||img.src;
-    full.alt=img.alt||'Product image';
-    caption.textContent=img.alt||'';
-    viewer.classList.add('open');
-    viewer.setAttribute('aria-hidden','false');
-    document.body.style.overflow='hidden';
-  }
-  function closeProductImageViewer(){
-    const viewer=document.getElementById('productImageViewer');
-    if(!viewer)return;
-    viewer.classList.remove('open');
-    viewer.setAttribute('aria-hidden','true');
-    document.body.style.overflow='';
-  }
-  document.addEventListener('click',function(e){
-    const img=e.target.closest('.product-image img, .featured-card .product-image img, .surprise-image img');
-    if(!img)return;
-    e.preventDefault();
-    e.stopPropagation();
-    openProductImageViewer(img);
-  },true);
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeProductImageViewer();});
-  window.openProductImageViewer=openProductImageViewer;
-  window.closeProductImageViewer=closeProductImageViewer;
-})();
-
-
-/* ===== PRODUCT IMAGE FULLSCREEN VIEWER ===== */
-(function(){
-  function ensureProductImageViewer(){
-    let modal=document.getElementById('productImageViewer');
-    if(modal)return modal;
-    modal=document.createElement('div');
-    modal.id='productImageViewer';
-    modal.className='hidden';
-    modal.setAttribute('aria-hidden','true');
-    modal.innerHTML=`
-      <div class="baked-image-viewer-backdrop"></div>
-      <div class="baked-image-viewer-dialog" role="dialog" aria-modal="true" aria-label="Product image">
-        <button type="button" class="baked-image-viewer-close" aria-label="Close image">×</button>
-        <img class="baked-image-viewer-img" alt="Product image">
-        <div class="baked-image-viewer-name"></div>
-      </div>`;
-    document.body.appendChild(modal);
-    const style=document.createElement('style');
-    style.id='bakedImageViewerStyles';
-    style.textContent=`
-      #productImageViewer{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px}
-      #productImageViewer.hidden{display:none!important}
-      .baked-image-viewer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.88)}
-      .baked-image-viewer-dialog{position:relative;z-index:1;max-width:min(94vw,1100px);max-height:94vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
-      .baked-image-viewer-img{display:block;max-width:94vw;max-height:84vh;width:auto;height:auto;object-fit:contain;background:#fff;border-radius:16px;box-shadow:0 20px 70px rgba(0,0,0,.45)}
-      .baked-image-viewer-close{position:absolute;top:-18px;right:-18px;width:46px;height:46px;border:0;border-radius:50%;background:#fff;color:#111;font-size:32px;line-height:1;cursor:pointer;z-index:2;box-shadow:0 4px 18px rgba(0,0,0,.35)}
-      .baked-image-viewer-name{margin-top:12px;color:#fff;font-weight:800;font-size:16px;text-align:center}
-      .product-image img.click-enlarge-image{cursor:zoom-in!important}
-      @media(max-width:600px){#productImageViewer{padding:10px}.baked-image-viewer-img{max-width:96vw;max-height:78vh}.baked-image-viewer-close{top:8px;right:8px;width:42px;height:42px}}
-    `;
-    document.head.appendChild(style);
-    const close=()=>{modal.classList.add('hidden');modal.setAttribute('aria-hidden','true');document.body.style.overflow='';};
-    modal.querySelector('.baked-image-viewer-close').onclick=close;
-    modal.querySelector('.baked-image-viewer-backdrop').onclick=close;
-    return modal;
-  }
-  function openProductImage(src,name){
-    if(!src)return;
-    const modal=ensureProductImageViewer();
-    modal.querySelector('.baked-image-viewer-img').src=src;
-    modal.querySelector('.baked-image-viewer-img').alt=name||'Product image';
-    modal.querySelector('.baked-image-viewer-name').textContent=name||'';
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden','false');
-    document.body.style.overflow='hidden';
-  }
-  document.addEventListener('click',function(e){
-    const img=e.target.closest('.product-image img');
-    if(!img)return;
-    e.preventDefault();
-    e.stopPropagation();
-    if(typeof e.stopImmediatePropagation==='function')e.stopImmediatePropagation();
-    openProductImage(img.dataset.fullSrc||img.currentSrc||img.src,img.dataset.productName||img.alt||'');
-  },true);
-  document.addEventListener('keydown',function(e){
-    if(e.key==='Escape'){
-      const modal=document.getElementById('productImageViewer');
-      if(modal&&!modal.classList.contains('hidden')){
-        modal.classList.add('hidden');modal.setAttribute('aria-hidden','true');document.body.style.overflow='';
-      }
-    }
-  });
-})();
