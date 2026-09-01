@@ -135,41 +135,57 @@ function supportsStrainSelection(p){
 function selectableStrains(p){
   return supportsStrainSelection(p)?parseStrainList(p?.description):[];
 }
+function isFlowerProduct(p){
+  return String(p?.category||'').toLowerCase().replace(/[^a-z]/g,'').includes('flower');
+}
+const FLOWER_WEIGHTS=[1,2,3,5];
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
   const strains=selectableStrains(p);
   if(!strains.length)return;
   $('#strainModalTitle').textContent=p.name;
-  $('#strainModalSubtitle').textContent='Choose a strain and quantity';
+  $('#strainModalSubtitle').textContent=isFlowerProduct(p)?'Choose a strain, pack size and quantity':'Choose a strain and quantity';
   $('#strainModalList').innerHTML=strains.map((s,i)=>`<div class="strain-row selectable-strain">
     <div class="strain-info">
       <strong>${escapeHtml(s.name)}</strong>
-      <small>${s.qty} available · ${money(p.price)} each</small>
+      <small>${s.qty} ${isFlowerProduct(p)?'grams':'available'} · ${money(p.price)} per ${isFlowerProduct(p)?'gram':'item'}</small>
     </div>
     <div class="strain-order">
-      <input class="strain-order-qty" data-index="${i}" type="number" min="1" max="${s.qty}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(s.name)}">
+      ${isFlowerProduct(p)?`<select class="strain-weight" data-index="${i}" aria-label="Pack size for ${escapeHtml(s.name)}">${FLOWER_WEIGHTS.map(g=>`<option value="${g}" ${s.qty<g?'disabled':''}>${g}G · ${money(Number(p.price)*g)}</option>`).join('')}</select>`:''}
+      <input class="strain-order-qty" data-index="${i}" type="number" min="1" max="${s.qty}" value="1" inputmode="numeric" aria-label="Pack quantity for ${escapeHtml(s.name)}">
       <button type="button" class="btn primary strain-add" data-id="${p.id}" data-index="${i}" ${s.qty<=0?'disabled':''}>${s.qty<=0?'Out of stock':'Add to cart'}</button>
     </div>
   </div>`).join('');
   $$('.strain-add').forEach(b=>b.onclick=()=>{
     const strain=strains[Number(b.dataset.index)];
     const input=$(`.strain-order-qty[data-index="${b.dataset.index}"]`);
-    addStrainToCart(p,strain,Number(input?.value||1));
+    const weight=Number($(`.strain-weight[data-index="${b.dataset.index}"]`)?.value||1);
+    addStrainToCart(p,strain,Number(input?.value||1),weight);
+  });
+  $$('.strain-weight').forEach(select=>select.onchange=()=>{
+    const strain=strains[Number(select.dataset.index)];
+    const input=$(`.strain-order-qty[data-index="${select.dataset.index}"]`);
+    const maxPacks=Math.floor(Number(strain.qty)/Number(select.value));
+    input.max=Math.max(1,maxPacks);
+    input.value=Math.min(Number(input.value)||1,Math.max(1,maxPacks));
   });
   $('#strainModal').classList.remove('hidden');
   $('#drawerBackdrop').classList.remove('hidden');
 }
-function addStrainToCart(p,strain,requestedQuantity=1){
+function addStrainToCart(p,strain,requestedQuantity=1,requestedGrams=1){
   const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
-  if(amount>strain.qty)return toast(`Only ${strain.qty} ${strain.name} available`);
-  const key=`${p.id}::${strain.name}`;
+  const grams=isFlowerProduct(p)&&FLOWER_WEIGHTS.includes(Number(requestedGrams))?Number(requestedGrams):1;
+  const gramsRequired=amount*grams;
+  if(gramsRequired>strain.qty)return toast(`Only ${strain.qty}g ${strain.name} available`);
+  const key=`${p.id}::${strain.name}::${grams}g`;
   const item=cart.find(x=>String(x.cartKey||x.id)===key);
   const existing=item?item.quantity:0;
-  if(existing+amount>strain.qty)return toast(`Only ${Math.max(0,strain.qty-existing)} more ${strain.name} available`);
+  const existingGrams=existing*grams;
+  if(existingGrams+gramsRequired>strain.qty)return toast(`Only ${Math.floor((strain.qty-existingGrams)/grams)} more ${grams}G pack(s) available`);
   if(item)item.quantity+=amount;
-  else cart.push({id:p.id,cartKey:key,name:`${p.name} — ${strain.name}`,parentName:p.name,strain:strain.name,price:Number(p.price),quantity:amount,stock:strain.qty});
+  else cart.push({id:p.id,cartKey:key,name:`${p.name} — ${strain.name}${isFlowerProduct(p)?` — ${grams}G`:''}`,parentName:p.name,strain:strain.name,grams,price:Number(p.price)*grams,quantity:amount,stock:Math.floor(strain.qty/grams)});
   persistCart();
-  toast(`${amount} × ${strain.name} added to cart`);
+  toast(`${amount} × ${strain.name}${isFlowerProduct(p)?` ${grams}G`:''} added to cart`);
 }
 
 function renderProducts(){
@@ -351,7 +367,7 @@ async function placeOrder(e){
         p_customer_name:customerName,
         p_customer_phone:customerPhone,
         p_note:note,
-        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.quantity,strain:i.strain||null}))
+        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.quantity*Number(i.grams||1),strain:i.strain||null}))
       })
     });
 
