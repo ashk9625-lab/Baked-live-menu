@@ -97,11 +97,6 @@
       <div id="categoryChips" class="chips"></div>
       <div id="status" class="status">Loading live stock…</div>
       <section id="productGrid" class="product-grid"></section>
-
-      <section class="suggestion-cta">
-        <div><p class="eyebrow accent">HELP US IMPROVE</p><h2>Got an idea for the menu?</h2><p>Suggest a product, feature or improvement you would like to see.</p></div>
-        <button id="openSuggestionBox" class="btn primary" type="button">💡 Suggest an idea</button>
-      </section>
     </section>
 
     <section id="adminView" class="admin-view hidden">
@@ -131,21 +126,13 @@
       <div id="adminDashboard" class="hidden">
         <div class="admin-heading">
           <div><p class="eyebrow accent">BAKED CONTROL CENTRE</p><h2>Admin Dashboard</h2></div>
-          <div class="admin-heading-actions">
-            <button id="adminAlertsButton" class="btn ghost admin-alert-button" type="button" aria-label="Open Admin Alerts">
-              <span class="alert-bell">🔔</span> Alerts <b id="adminAlertCount" class="alert-count hidden">0</b>
-            </button>
-            <button id="logoutButton" class="btn ghost">Sign out</button>
-          </div>
+          <button id="logoutButton" class="btn ghost">Sign out</button>
         </div>
         <div class="admin-tabs">
           <button class="admin-tab active" data-tab="products">Products</button>
           <button class="admin-tab" data-tab="orders">Orders</button>
           <button class="admin-tab" data-tab="inventory">Inventory</button>
-          <button class="admin-tab" data-tab="sales">Sales</button>
-          <button class="admin-tab" data-tab="stockdashboard">Stock Dashboard</button>
           <button class="admin-tab" data-tab="settings">Settings</button>
-          <button class="admin-tab" data-tab="suggestions">Suggestions <span id="suggestionAdminCount"></span></button>
           <button class="admin-tab" data-tab="users">Admin Users</button>
         </div>
 
@@ -198,57 +185,6 @@
           <div id="stockHistory" class="admin-list"></div>
         </section>
 
-        <section id="salesTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar sales-heading">
-            <div><h3>Sales Dashboard</h3><p class="admin-help">Track products and strains being ordered from the live menu.</p></div>
-            <button id="refreshSalesButton" class="btn ghost" type="button">Refresh</button>
-          </div>
-
-          <div class="sales-filters">
-            <select id="salesPeriod">
-              <option value="today">Today</option>
-              <option value="7" selected>Last 7 days</option>
-              <option value="30">Last 30 days</option>
-              <option value="all">All time</option>
-            </select>
-            <select id="salesStatus">
-              <option value="active" selected>All active orders</option>
-              <option value="Pending">Pending</option>
-              <option value="Confirmed">Confirmed</option>
-              <option value="Ready">Ready</option>
-              <option value="Completed">Completed</option>
-            </select>
-            <input id="salesSearch" type="search" placeholder="Search product or strain…">
-            <button id="exportSalesButton" class="btn ghost" type="button">Export CSV</button>
-          </div>
-
-          <div class="sales-kpis">
-            <div class="sales-kpi"><span>Sales Value</span><strong id="salesRevenue">R0</strong><small>Non-cancelled orders</small></div>
-            <div class="sales-kpi"><span>Orders</span><strong id="salesOrderCount">0</strong><small>Orders in selected period</small></div>
-            <div class="sales-kpi"><span>Units Sold</span><strong id="salesUnits">0</strong><small>Includes R0 products</small></div>
-            <div class="sales-kpi"><span>Top Product</span><strong id="salesTopProduct">—</strong><small id="salesTopProductQty">No sales yet</small></div>
-          </div>
-
-          <div class="sales-section-head"><div><h4>Products Sold</h4><p>Aggregated from actual customer orders.</p></div></div>
-          <div class="sales-table-wrap">
-            <table class="sales-table">
-              <thead><tr><th>Product / Strain</th><th>Qty Sold</th><th>Sales Value</th><th>Orders</th></tr></thead>
-              <tbody id="salesProductsBody"><tr><td colspan="4">Loading sales…</td></tr></tbody>
-            </table>
-          </div>
-
-          <div class="sales-section-head"><div><h4>Recent Sales</h4><p>Latest order activity in the selected period.</p></div></div>
-          <div id="salesRecent" class="sales-recent"></div>
-          <p id="salesMessage" class="form-message"></p>
-        </section>
-
-        
-        <section id="suggestionsTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar"><div><h3>Customer Suggestions</h3><p class="admin-help">Ideas submitted from the live menu.</p></div><button id="refreshSuggestionsButton" class="btn ghost" type="button">Refresh</button></div>
-          <div id="adminSuggestions" class="admin-list"></div>
-          <p id="suggestionsAdminMessage" class="form-message"></p>
-        </section>
-
         <section id="usersTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Admin Users</h3><button id="refreshAdminsButton" class="btn ghost" type="button">Refresh</button></div>
           <form id="addAdminForm" class="inline-admin-form">
@@ -257,22 +193,6 @@
           </form>
           <p id="adminUsersMessage" class="form-message"></p>
           <div id="adminUsersList" class="admin-list"></div>
-        </section>
-
-        <section id="stockdashboardTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar stockdash-heading">
-            <div><h3>Stock Dashboard</h3><p class="admin-help">Live stock control, low-stock warnings and physical stock counts.</p></div>
-            <div class="toolbar-actions"><button id="refreshStockDashboard" class="btn ghost" type="button">Refresh</button><button id="exportStockDashboard" class="btn ghost" type="button">Export CSV</button></div>
-          </div>
-          <div class="stockdash-kpis">
-            <div class="sales-kpi"><span>Total Units</span><strong id="sdTotalUnits">0</strong><small>Across products and strains</small></div>
-            <div class="sales-kpi"><span>Low Stock</span><strong id="sdLowStock">0</strong><small>At or below reorder level</small></div>
-            <div class="sales-kpi"><span>Out of Stock</span><strong id="sdOutStock">0</strong><small>Needs attention</small></div>
-            <div class="sales-kpi"><span>Stock Value</span><strong id="sdStockValue">R0</strong><small>Retail value at current prices</small></div>
-          </div>
-          <div class="stockdash-filters"><input id="sdSearch" type="search" placeholder="Search product or strain…"><select id="sdStatus"><option value="all">All stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="ok">Healthy stock</option></select></div>
-          <div class="sales-table-wrap"><table class="sales-table stockdash-table"><thead><tr><th>Product / Strain</th><th>Price</th><th>System Stock</th><th>Status</th><th>Physical Count</th><th>Difference</th><th>Action</th></tr></thead><tbody id="stockDashboardBody"><tr><td colspan="7">Loading stock…</td></tr></tbody></table></div>
-          <div class="sales-section-head"><div><h4>Recent Stock Movements</h4><p>Orders, restocks, adjustments and stocktakes.</p></div></div><div id="stockDashboardHistory" class="sales-recent"></div><p id="stockDashboardMessage" class="form-message"></p>
         </section>
 
         <section id="settingsTab" class="admin-tab-panel hidden">
@@ -303,6 +223,10 @@
         <label>Customer name<input id="customerName" required maxlength="80"></label>
         
         <label>Order notes<textarea id="customerNote" rows="3" maxlength="300" placeholder="Optional"></textarea></label>
+        <label class="check terms-check">
+          <input id="termsAccepted" type="checkbox" required>
+          <span>I confirm that I am 18+ and agree to the <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>.</span>
+        </label>
         <button id="placeOrderButton" class="btn primary wide" type="submit">Place order</button>
       </form>
       <p id="checkoutMessage" class="form-message"></p>
@@ -325,7 +249,7 @@
         <label>Low-stock level<input id="productReorder" type="number" min="0" value="5" required></label>
         <label class="full">Image URL<input id="productImage" type="url" placeholder="https://..."></label>
         <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
-        <label class="full">Short Description<textarea id="productDescription" rows="3" placeholder="Short description shown beneath the product name"></textarea></label>
+        <label class="full">Description<textarea id="productDescription" rows="3" placeholder="Optional normal product description"></textarea></label>
         <label class="full">Strains & quantities
           <textarea id="productStrains" rows="6" placeholder="Biscotti = 100&#10;Pink Grapefruit = 75&#10;Sour Diesel = 50"></textarea>
           <small class="field-help">One strain per line. Use: Strain name = quantity</small>
@@ -352,39 +276,6 @@
     </div>
   </div>
 
-  <div id="orderDetailModal" class="modal hidden" aria-hidden="true">
-    <div class="modal-card order-detail-card">
-      <div class="modal-head">
-        <div><p class="eyebrow accent">ORDER DETAIL</p><h2 id="orderDetailTitle">Order</h2></div>
-        <button class="icon-button" type="button" data-close="orderDetailModal">×</button>
-      </div>
-      <div id="orderDetailContent"></div>
-      <div class="modal-actions order-detail-actions">
-        <button id="printPackingSlipButton" class="btn primary" type="button">Print Packing Slip</button>
-        <button class="btn ghost" type="button" data-close="orderDetailModal">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="adminAlertsModal" class="modal hidden" aria-hidden="true">
-    <div class="modal-card alerts-centre-card">
-      <div class="modal-head">
-        <div><p class="eyebrow accent">ADMIN ALERTS CENTRE</p><h2>Needs Attention</h2></div>
-        <button class="icon-button" type="button" data-close="adminAlertsModal">×</button>
-      </div>
-      <div class="alerts-summary">
-        <div><strong id="alertNewOrders">0</strong><span>New Orders</span></div>
-        <div><strong id="alertLowStock">0</strong><span>Low Stock</span></div>
-        <div><strong id="alertOutStock">0</strong><span>Out of Stock</span></div>
-      </div>
-      <div id="adminAlertsList" class="admin-alerts-list"></div>
-      <div class="modal-actions">
-        <button id="alertsGoOrders" class="btn ghost" type="button">View Orders</button>
-        <button id="alertsGoStock" class="btn primary" type="button">View Stock Dashboard</button>
-      </div>
-    </div>
-  </div>
-
   <div id="toast" class="toast hidden"></div>
 
   <div id="surpriseModal" class="modal hidden" aria-hidden="true">
@@ -402,7 +293,6 @@
 <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span><span>STRICTLY 18+ ONLY. No persons under 18 may use this live menu.</span>
 </footer>
   <script src="app.js"></script>
-  <script src="surprise-me-strain-fix.js"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));}</script>
 
   <div id="strainModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="strainModalTitle">
@@ -416,29 +306,6 @@
   <span class="install-baked-icon">⬇</span>
   <span>Install Baked Menu</span>
 </button>
-
-
-  <div id="productImageViewer" class="product-image-viewer hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Product image viewer">
-    <button id="productImageViewerClose" class="product-image-viewer-close" type="button" aria-label="Close full image">×</button>
-    <img id="productImageViewerImg" src="" alt="">
-    <div id="productImageViewerName" class="product-image-viewer-name"></div>
-  </div>
-
-
-  <div id="suggestionModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="suggestionTitle">
-    <div class="modal-card suggestion-modal-card">
-      <button id="closeSuggestionBox" class="modal-close" type="button" aria-label="Close">×</button>
-      <p class="eyebrow accent">BAKED SUGGESTION BOX</p>
-      <h2 id="suggestionTitle">What should we add or improve?</h2>
-      <p>Your ideas help us improve the live menu.</p>
-      <form id="suggestionForm" class="form-stack">
-        <label>Your name <span class="optional">(optional)</span><input id="suggestionName" type="text" maxlength="80" placeholder="Name"></label>
-        <label>Your suggestion<textarea id="suggestionText" maxlength="1000" rows="5" placeholder="Tell us your idea…" required></textarea></label>
-        <button class="btn primary wide" type="submit">Send suggestion</button>
-      </form>
-      <p id="suggestionMessage" class="form-message"></p>
-    </div>
-  </div>
 
 </body>
 </html>
