@@ -365,3 +365,6 @@
 
 @media(max-width:620px){.admin-heading-actions{width:100%;justify-content:flex-end}.alerts-summary{grid-template-columns:1fr}.order-detail-meta{grid-template-columns:1fr}}
 \n\n/* Flower weight selector: 1G / 2G / 3G / 5G */\n.flower-weight-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;}\n.flower-weight-btn{min-height:44px;border:1px solid var(--line,#dfe6e1);border-radius:10px;background:#fff;color:var(--text,#172019);font:inherit;font-weight:800;cursor:pointer;}\n.flower-weight-btn.active{border:2px solid #111;background:#111;color:#fff;}\n.flower-weight-btn:disabled{opacity:.35;cursor:not-allowed;}\n@media(max-width:420px){.flower-weight-picker{grid-template-columns:repeat(2,1fr);}}\n
+
+/* Flower weight selector */
+.flower-weight-picker{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 4px}.flower-weight-btn{min-width:58px;padding:10px 12px;border:1px solid #d9e3dc;border-radius:10px;background:#fff;color:#172019;font-weight:800;cursor:pointer}.flower-weight-btn.active{background:#16ad67;color:#fff;border-color:#16ad67}.flower-weight-btn:disabled{opacity:.35;cursor:not-allowed}.selectable-strain .strain-info small{line-height:1.35}

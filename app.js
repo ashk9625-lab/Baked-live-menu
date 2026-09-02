@@ -90,16 +90,24 @@ function splitProductDescription(raw=''){
 }
 function parseStrainLines(text=''){
   const items=[];
-  String(text||'').split(/\r?\n/).forEach(line=>{
-    line=line.trim(); if(!line)return;
-    let m=line.match(/^(.+?)\s*(?:=|:|-)\s*(\d+)\s*$/);
+  String(text||'').split(/\r?\n/).forEach(rawLine=>{
+    let line=String(rawLine||'').trim(); if(!line)return;
+    // Accept the admin formats people naturally type, including Flower grams:
+    // Baked Alaska = 100, Baked Alaska = 100g, Baked Alaska - 100 g,
+    // 100 x Baked Alaska, 100g x Baked Alaska, or Baked Alaska 100g.
+    let m=line.match(/^(.+?)\s*(?:=|:|-)\s*(\d+(?:\.\d+)?)\s*g?\s*$/i);
     if(!m){
-      const x=line.match(/^(\d+)\s*[x×]\s*(.+?)\s*$/i);
+      const x=line.match(/^(\d+(?:\.\d+)?)\s*g?\s*[x×]\s*(.+?)\s*$/i);
       if(x)m=[null,x[2],x[1]];
     }
+    if(!m){
+      const x=line.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*g\s*$/i);
+      if(x)m=[null,x[1],x[2]];
+    }
     if(m){
-      const name=String(m[1]||'').trim(),qty=Number(m[2]);
-      if(name&&Number.isInteger(qty)&&qty>=0)items.push({name,qty});
+      const name=String(m[1]||'').trim().replace(/[,:;=-]+$/,'').trim();
+      const qty=Number(m[2]);
+      if(name&&Number.isFinite(qty)&&qty>=0)items.push({name,qty});
     }
   });
   return items;
