@@ -374,3 +374,21 @@
 .suggestion-count{display:inline-flex;min-width:18px;height:18px;border-radius:999px;background:#d52b2b;color:#fff;align-items:center;justify-content:center;font-size:9px;font-weight:900;padding:0 5px;margin-left:4px}
 .suggestion-admin-row{align-items:flex-start}.suggestion-copy{margin:8px 0 0;white-space:pre-wrap;max-width:760px;font-size:12px;line-height:1.45}
 @media(max-width:700px){.suggestion-card{grid-template-columns:1fr}.suggestion-section{padding-left:14px;padding-right:14px}}
+
+
+/* ===== QUICK STOCK ADDER ===== */
+.fast-stock-title>div{display:flex;flex-direction:column;gap:2px}
+.quick-stock-product-total{font-size:10px;font-weight:800;color:var(--muted);white-space:nowrap}
+.quick-stock-name{display:flex!important;align-items:center;gap:8px;min-width:0}
+.quick-stock-name>span{font-weight:800}
+.quick-size-badge{display:inline-flex;align-items:center;justify-content:center;min-width:38px;padding:5px 8px;border-radius:999px;background:var(--mint);color:var(--green-dark);font-size:10px;letter-spacing:.03em}
+.quick-stock-controls{display:grid!important;grid-template-columns:auto 18px 88px auto;align-items:center;gap:8px!important}
+.quick-plus{text-align:center;font-size:18px;font-weight:900;color:var(--green-dark)}
+.quick-stock-add{background:#fff}
+.quick-stock-add.has-change{border-color:var(--green)!important;box-shadow:0 0 0 2px rgba(30,169,96,.12)}
+.quick-new-total{min-width:70px}
+@media(max-width:680px){
+  .quick-stock-row{align-items:flex-start;flex-direction:column}
+  .quick-stock-controls{width:100%;grid-template-columns:auto 18px 82px 1fr}
+  .quick-new-total{text-align:right}
+}

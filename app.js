@@ -736,44 +736,89 @@ function renderFastStock(){
   fastStockProducts.forEach(p=>{
     const strains=parseStrainList(p.description);
     if(!strains.length)return;
-    const visible=strains.map((s,i)=>({s,i})).filter(x=>!q||`${p.name} ${p.sku||''} ${x.s.name}`.toLowerCase().includes(q));
+    const visible=strains.map((s,i)=>({s,i})).filter(x=>{
+      const size=x.s.weightGrams?`${x.s.weightGrams}g`:'';
+      return !q||`${p.name} ${p.sku||''} ${x.s.name} ${size}`.toLowerCase().includes(q);
+    });
     if(!visible.length)return;
-    groups.push(`<div class="fast-stock-group"><div class="fast-stock-title"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku||'')}</small></div>
-      ${visible.map(({s,i})=>`<div class="fast-stock-row"><span>${escapeHtml(s.name)}</span><div><small>Current ${s.qty}</small><input class="fast-stock-input" data-product="${p.id}" data-index="${i}" type="number" min="0" step="1" value="${s.qty}" inputmode="numeric"></div></div>`).join('')}
+    groups.push(`<div class="fast-stock-group">
+      <div class="fast-stock-title">
+        <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku||'')}</small></div>
+        <span class="quick-stock-product-total">${strains.reduce((a,s)=>a+Number(s.qty||0),0)} total</span>
+      </div>
+      ${visible.map(({s,i})=>{
+        const size=s.weightGrams?`<b class="quick-size-badge">${s.weightGrams}G</b>`:'';
+        return `<div class="fast-stock-row quick-stock-row">
+          <div class="quick-stock-name"><span>${escapeHtml(s.name)}</span>${size}</div>
+          <div class="quick-stock-controls">
+            <small>Current <b>${s.qty}</b></small>
+            <span class="quick-plus">+</span>
+            <input class="fast-stock-input quick-stock-add" data-product="${p.id}" data-index="${i}" data-current="${s.qty}" type="number" min="0" step="1" value="" placeholder="0" inputmode="numeric" aria-label="Add stock">
+            <small class="quick-new-total">New <b>${s.qty}</b></small>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`);
   });
   box.innerHTML=groups.length?groups.join(''):'<div class="empty-state"><p>No strain stock found.</p></div>';
+
+  $$('.quick-stock-add').forEach(input=>{
+    input.oninput=()=>{
+      const current=Number(input.dataset.current||0);
+      const add=Math.max(0,Number(input.value||0));
+      const row=input.closest('.quick-stock-row');
+      const total=row?.querySelector('.quick-new-total b');
+      if(total)total.textContent=current+add;
+      input.classList.toggle('has-change',add>0);
+    };
+  });
 }
 async function loadFastStock(){
   try{
-    fastStockProducts=await api('/rest/v1/products?select=id,sku,name,description&order=name.asc',{auth:true});
+    fastStockProducts=await api('/rest/v1/products?select=id,sku,name,category,description&order=name.asc',{auth:true});
     renderFastStock();
   }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function saveFastStock(){
-  const inputs=$$('.fast-stock-input');
+  const inputs=$$('.quick-stock-add');
   const byProduct=new Map();
+
   inputs.forEach(input=>{
+    const add=Number(input.value||0);
+    if(!Number.isInteger(add)||add<=0)return;
     const p=fastStockProducts.find(x=>String(x.id)===String(input.dataset.product));if(!p)return;
     const strains=parseStrainList(p.description);
-    const i=Number(input.dataset.index),qty=Number(input.value);
-    if(!strains[i]||!Number.isInteger(qty)||qty<0)return;
-    strains[i].qty=qty;byProduct.set(String(p.id),{p,strains});
+    const i=Number(input.dataset.index);
+    if(!strains[i])return;
+    strains[i].qty=Number(strains[i].qty||0)+add;
+    byProduct.set(String(p.id),{p,strains});
   });
-  if(!byProduct.size){toast('No strain stock to save');return;}
-  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');btn.disabled=true;msg.textContent=`Saving ${byProduct.size} product${byProduct.size===1?'':'s'}…`;let saved=0;
+
+  if(!byProduct.size){toast('Enter stock to add first');return;}
+  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');
+  btn.disabled=true;
+  msg.textContent=`Adding stock to ${byProduct.size} product${byProduct.size===1?'':'s'}…`;
+  let saved=0;
   try{
     for(const {p,strains} of byProduct.values()){
       const normal=splitProductDescription(p.description).description;
-      const strainText=strains.map(s=>`${s.name} = ${s.qty}`).join('\n');
+      // Preserve Flower gram-size variants exactly.
+      const strainText=strains.map(s=>s.weightGrams?`${s.name}=${s.qty}X${s.weightGrams}G`:`${s.name} = ${s.qty}`).join('\n');
       const description=composeProductDescription(normal,strainText);
-      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{
+        method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},
+        body:JSON.stringify({description,updated_at:new Date().toISOString()})
+      });
       saved++;
     }
-    toast('Strain stock updated');msg.textContent=`Saved ${saved} product${saved===1?'':'s'} successfully.`;
+    toast('Stock added');
+    msg.textContent=`Stock added successfully to ${saved} product${saved===1?'':'s'}.`;
     await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
-  }catch(err){msg.textContent=`Saved ${saved} before an error: ${err.message}`;toast('Some strain stock could not be saved');}
-  finally{btn.disabled=false;}
+    if(typeof updateAdminAlerts==='function')updateAdminAlerts();
+  }catch(err){
+    msg.textContent=`Saved ${saved} before an error: ${err.message}`;
+    toast('Some stock could not be added');
+  }finally{btn.disabled=false;}
 }
 
 let stockCsvChanges = [];
