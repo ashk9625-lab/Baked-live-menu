@@ -1002,7 +1002,7 @@ function exportSalesCsv(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-sales-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='suggestions')loadSuggestions(); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
 
 function luhnValidSouthAfricanId(idNumber){
   if(!/^\d{13}$/.test(idNumber)) return false;
@@ -1118,6 +1118,81 @@ if($('#refreshStockDashboard'))$('#refreshStockDashboard').onclick=loadStockDash
 if($('#exportStockDashboard'))$('#exportStockDashboard').onclick=exportStockDashboardCsv;
 if($('#sdSearch'))$('#sdSearch').oninput=renderStockDashboard;
 if($('#sdStatus'))$('#sdStatus').onchange=renderStockDashboard;
+
+// ===== CUSTOMER SUGGESTIONS =====
+async function submitSuggestion(e){
+  e.preventDefault();
+  const name=($('#suggestionName')?.value||'').trim();
+  const suggestion=($('#suggestionText')?.value||'').trim();
+  const msg=$('#suggestionMessage');
+  const btn=$('#submitSuggestionButton');
+  if(!suggestion){ if(msg)msg.textContent='Please enter a suggestion.'; return; }
+  if(btn)btn.disabled=true;
+  if(msg)msg.textContent='Sending…';
+  try{
+    await api('/rest/v1/menu_suggestions',{
+      method:'POST',
+      headers:{Prefer:'return=minimal'},
+      body:JSON.stringify({customer_name:name||null,suggestion,status:'New'})
+    });
+    if($('#suggestionForm'))$('#suggestionForm').reset();
+    if(msg)msg.textContent='Thank you — your suggestion has been sent.';
+    toast('Suggestion sent');
+  }catch(err){
+    if(msg)msg.textContent=err.message;
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+async function loadSuggestions(){
+  const box=$('#adminSuggestions');
+  if(!box||!accessToken)return;
+  box.innerHTML='<div class="empty-state"><p>Loading suggestions…</p></div>';
+  try{
+    const rows=await api('/rest/v1/menu_suggestions?select=id,customer_name,suggestion,status,created_at&order=created_at.desc&limit=200',{auth:true})||[];
+    const fresh=rows.filter(r=>String(r.status||'New').toLowerCase()==='new').length;
+    const count=$('#suggestionAdminCount');
+    if(count){count.textContent=fresh;count.classList.toggle('hidden',fresh===0);}
+    box.innerHTML=rows.length?rows.map(r=>`<article class="admin-row suggestion-admin-row">
+      <div class="admin-row-main">
+        <span class="admin-icon">💡</span>
+        <div>
+          <strong>${escapeHtml(r.customer_name||'Anonymous')}</strong>
+          <small>${new Date(r.created_at).toLocaleString('en-ZA')} · ${escapeHtml(r.status||'New')}</small>
+          <p class="suggestion-copy">${escapeHtml(r.suggestion||'')}</p>
+        </div>
+      </div>
+      <div class="admin-row-data">
+        <button class="btn ghost compact suggestion-status" data-id="${r.id}" data-status="${String(r.status||'New').toLowerCase()==='new'?'Reviewed':'New'}">${String(r.status||'New').toLowerCase()==='new'?'Mark reviewed':'Mark new'}</button>
+        <button class="btn danger compact suggestion-delete" data-id="${r.id}">Delete</button>
+      </div>
+    </article>`).join(''):'<div class="empty-state"><h3>No suggestions yet</h3><p>Customer suggestions will appear here.</p></div>';
+    $$('.suggestion-status').forEach(b=>b.onclick=()=>setSuggestionStatus(b.dataset.id,b.dataset.status));
+    $$('.suggestion-delete').forEach(b=>b.onclick=()=>deleteSuggestion(b.dataset.id));
+  }catch(err){
+    box.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;
+  }
+}
+async function setSuggestionStatus(id,status){
+  try{
+    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({status})});
+    await loadSuggestions();
+  }catch(err){toast(err.message);}
+}
+async function deleteSuggestion(id){
+  if(!confirm('Delete this suggestion?'))return;
+  try{
+    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',auth:true,headers:{Prefer:'return=minimal'}});
+    toast('Suggestion deleted');
+    await loadSuggestions();
+  }catch(err){toast(err.message);}
+}
+
+
+if($('#suggestionForm'))$('#suggestionForm').onsubmit=submitSuggestion;
+if($('#refreshSuggestionsButton'))$('#refreshSuggestionsButton').onclick=loadSuggestions;
+
 if($('#adminAlertsButton'))$('#adminAlertsButton').onclick=openAdminAlerts;
 if($('#printPackingSlipButton'))$('#printPackingSlipButton').onclick=()=>printPackingSlip();
 if($('#alertsGoOrders'))$('#alertsGoOrders').onclick=()=>{closeOverlays();switchAdminTab('orders');};
