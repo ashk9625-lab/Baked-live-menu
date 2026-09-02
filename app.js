@@ -105,6 +105,16 @@ function parseStrainLines(text=''){
       return;
     }
 
+    // Also support pack size before the strain name, e.g. 1G DARK STAR(I)=25
+    v=line.match(/^\s*(1|2|3|5)\s*g\s+(.+?)\s*(?:=|:|-)\s*(\d+(?:\.\d+)?)\s*$/i);
+    if(v){
+      const weightGrams=Number(v[1]);
+      const name=String(v[2]||'').trim();
+      const qty=Number(v[3]);
+      if(name&&Number.isFinite(qty)&&qty>=0)items.push({name,qty,weightGrams,backendName:`${name} [${weightGrams}G]`});
+      return;
+    }
+
     // Internal stored format used so the order RPC can deduct the exact size:
     // DARK STAR(I) [1G] = 60
     v=line.match(/^(.+?)\s*\[(1|2|3|5)\s*g\]\s*=\s*(\d+(?:\.\d+)?)\s*$/i);
@@ -169,89 +179,63 @@ function openStrainModal(id){
   if(!strains.length)return;
   const flower=isFlowerProduct(p);
   const sizedFlower=flower&&strains.some(s=>s.weightGrams);
+
   $('#strainModalTitle').textContent=p.name;
   $('#strainModalSubtitle').textContent=sizedFlower?'Choose a strain and available gram size':flower?'Choose a strain, then select 1G, 2G, 3G or 5G':'Choose a strain and quantity';
 
   if(sizedFlower){
-    const grouped=[];
-    strains.filter(s=>s.weightGrams).forEach(s=>{
-      let g=grouped.find(x=>x.name.toLowerCase()===s.name.toLowerCase());
-      if(!g){g={name:s.name,variants:[]};grouped.push(g);}
-      g.variants.push(s);
-    });
-    grouped.forEach(g=>g.variants.sort((a,b)=>a.weightGrams-b.weightGrams));
-    $('#strainModalList').innerHTML=grouped.map((g,i)=>{
-      const available=g.variants.filter(v=>v.qty>0);
-      const first=(available[0]||g.variants[0]);
-      return `<div class="strain-row selectable-strain">
-        <div class="strain-info">
-          <strong>${escapeHtml(g.name)}</strong>
-          <small>${g.variants.map(v=>`${v.weightGrams}G: ${v.qty} available`).join(' · ')}</small>
-        </div>
-        <div class="flower-weight-picker" role="group" aria-label="Choose flower weight for ${escapeHtml(g.name)}">
-          ${g.variants.map(v=>`<button type="button" class="flower-weight-btn${v===first?' active':''}" data-index="${i}" data-weight="${v.weightGrams}" ${v.qty<=0?'disabled':''}>${v.weightGrams}G</button>`).join('')}
-        </div>
-        <div class="strain-order">
-          <input class="strain-order-qty" data-index="${i}" type="number" min="1" max="${Math.max(1,first?.qty||1)}" value="1" inputmode="numeric" aria-label="Pack quantity for ${escapeHtml(g.name)}">
-          <button type="button" class="btn primary strain-add" data-id="${p.id}" data-index="${i}" data-weight="${first?.weightGrams||1}" ${(first?.qty||0)<=0?'disabled':''}>${(first?.qty||0)<=0?'Out of stock':'Add to cart'}</button>
-        </div>
-      </div>`;
-    }).join('');
-    $$('.flower-weight-btn').forEach(b=>b.onclick=()=>{
-      const i=Number(b.dataset.index),w=Number(b.dataset.weight),g=grouped[i],variant=g.variants.find(v=>v.weightGrams===w);
-      $$(`.flower-weight-btn[data-index="${i}"]`).forEach(x=>x.classList.toggle('active',x===b));
-      const add=$(`.strain-add[data-index="${i}"]`),input=$(`.strain-order-qty[data-index="${i}"]`);
-      if(add){add.dataset.weight=String(w);add.disabled=!variant||variant.qty<=0;add.textContent=variant&&variant.qty>0?'Add to cart':'Out of stock';}
-      if(input){input.max=String(Math.max(1,variant?.qty||1));if(Number(input.value)>Number(input.max))input.value=input.max;}
-    });
-    $$('.strain-add').forEach(b=>b.onclick=()=>{
-      const g=grouped[Number(b.dataset.index)],w=Number(b.dataset.weight||1),variant=g.variants.find(v=>v.weightGrams===w);
-      const input=$(`.strain-order-qty[data-index="${b.dataset.index}"]`);
-      if(variant)addFlowerPackVariantToCart(p,variant,Number(input?.value||1));
-    });
-  }else{
-    $('#strainModalList').innerHTML=strains.map((s,i)=>`<div class="strain-row selectable-strain">
+    // EVERY Flower pack-size entry is displayed as its own clean row:
+    // STRAIN NAME | size | quantity | Add to cart
+    const variants=strains.filter(s=>s.weightGrams);
+    $('#strainModalList').innerHTML=variants.map((s,i)=>`<div class="strain-row flower-variant-row">
       <div class="strain-info">
         <strong>${escapeHtml(s.name)}</strong>
-        <small>${s.qty}${flower?'g':''} available${flower?' · price updates by weight':` · ${money(p.price)} each`}</small>
+        <small>${s.weightGrams}G: ${s.qty} available</small>
       </div>
-      ${flower?`<div class="flower-weight-picker" role="group" aria-label="Choose flower weight for ${escapeHtml(s.name)}">
-        ${FLOWER_WEIGHTS.map(w=>`<button type="button" class="flower-weight-btn${w===1?' active':''}" data-index="${i}" data-weight="${w}" ${s.qty<w?'disabled':''}>${w}G</button>`).join('')}
-      </div>`:''}
-      <div class="strain-order">
-        <input class="strain-order-qty" data-index="${i}" type="number" min="1" max="${flower?Math.max(1,Math.floor(s.qty)):s.qty}" value="1" inputmode="numeric" aria-label="Pack quantity for ${escapeHtml(s.name)}">
-        <button type="button" class="btn primary strain-add" data-id="${p.id}" data-index="${i}" data-weight="1" ${s.qty<=0?'disabled':''}>${s.qty<=0?'Out of stock':'Add to cart'}</button>
-      </div>
+      <div class="flower-single-size">${s.weightGrams}G</div>
+      <input class="strain-quantity flower-variant-quantity" data-index="${i}" type="number" min="1" max="${Math.max(1,Number(s.qty||0))}" value="1" inputmode="numeric" ${Number(s.qty)<=0?'disabled':''}>
+      <button class="btn primary flower-variant-add" data-index="${i}" ${Number(s.qty)<=0?'disabled':''}>Add to cart</button>
     </div>`).join('');
-    $$('.flower-weight-btn').forEach(b=>b.onclick=()=>{
-      const i=Number(b.dataset.index),w=Number(b.dataset.weight),strain=strains[i];
-      $$(`.flower-weight-btn[data-index="${i}"]`).forEach(x=>x.classList.toggle('active',x===b));
-      const add=$(`.strain-add[data-index="${i}"]`),input=$(`.strain-order-qty[data-index="${i}"]`);
-      if(add)add.dataset.weight=String(w);
-      if(input){input.max=String(Math.max(1,Math.floor(strain.qty/w)));if(Number(input.value)>Number(input.max))input.value=input.max;}
+
+    $$('.flower-variant-add').forEach(btn=>btn.onclick=()=>{
+      const i=Number(btn.dataset.index);
+      const s=variants[i];
+      const row=btn.closest('.flower-variant-row');
+      const qty=Number(row?.querySelector('.flower-variant-quantity')?.value||1);
+      addStrainToCart(p,s,qty,s.weightGrams);
     });
-    $$('.strain-add').forEach(b=>b.onclick=()=>{
-      const strain=strains[Number(b.dataset.index)];
-      const input=$(`.strain-order-qty[data-index="${b.dataset.index}"]`);
-      addStrainToCart(p,strain,Number(input?.value||1),Number(b.dataset.weight||1));
+  }else{
+    $('#strainModalList').innerHTML=strains.map((s,i)=>`<div class="strain-row">
+      <div class="strain-info"><strong>${escapeHtml(s.name)}</strong><small>${s.qty} available</small></div>
+      ${flower?`<div class="flower-weight-picker" data-row="${i}">${FLOWER_WEIGHTS.map(w=>`<button type="button" class="flower-weight-btn ${w===1?'active':''}" data-weight="${w}" ${s.qty<w?'disabled':''}>${w}G</button>`).join('')}</div>`:''}
+      <input class="strain-quantity" data-index="${i}" type="number" min="1" max="${flower?Math.max(1,Math.floor(s.qty/(FLOWER_WEIGHTS.find(w=>s.qty>=w)||1))):s.qty}" value="1" inputmode="numeric">
+      <button class="btn primary strain-add" data-index="${i}" ${s.qty<=0?'disabled':''}>Add to cart</button>
+    </div>`).join('');
+
+    if(flower){
+      $$('.flower-weight-picker').forEach(picker=>{
+        picker.querySelectorAll('.flower-weight-btn').forEach(btn=>btn.onclick=()=>{
+          picker.querySelectorAll('.flower-weight-btn').forEach(x=>x.classList.remove('active'));
+          btn.classList.add('active');
+          const row=picker.closest('.strain-row'),input=row.querySelector('.strain-quantity'),s=strains[Number(picker.dataset.row)],w=Number(btn.dataset.weight||1);
+          input.max=Math.max(1,Math.floor(Number(s.qty||0)/w));
+          if(Number(input.value)>Number(input.max))input.value=input.max;
+        });
+      });
+    }
+    $$('.strain-add').forEach(btn=>btn.onclick=()=>{
+      const i=Number(btn.dataset.index),s=strains[i],row=btn.closest('.strain-row');
+      const qty=Number(row.querySelector('.strain-quantity')?.value||1);
+      const weight=flower?Number(row.querySelector('.flower-weight-btn.active')?.dataset.weight||1):null;
+      addStrainToCart(p,s,qty,weight);
     });
   }
+
   $('#strainModal').classList.remove('hidden');
+  $('#strainModal').setAttribute('aria-hidden','false');
   $('#drawerBackdrop').classList.remove('hidden');
 }
-function addFlowerPackVariantToCart(p,variant,requestedQuantity=1){
-  const packs=Math.max(1,Math.floor(Number(requestedQuantity)||1));
-  const grams=Number(variant.weightGrams)||1;
-  if(packs>variant.qty)return toast(`Only ${variant.qty} × ${grams}G ${variant.name} available`);
-  const key=`${p.id}::${variant.backendName}`;
-  const item=cart.find(x=>String(x.cartKey||x.id)===key);
-  const existing=item?item.quantity:0;
-  if(existing+packs>variant.qty)return toast(`Only ${Math.max(0,variant.qty-existing)} more ${grams}G ${variant.name} available`);
-  if(item)item.quantity+=packs;
-  else cart.push({id:p.id,cartKey:key,name:`${p.name} — ${variant.name} — ${grams}G`,parentName:p.name,strain:variant.name,strainBackend:variant.backendName,weightGrams:grams,packSizeStock:true,price:Number(p.price)*grams,quantity:packs,stock:variant.qty});
-  persistCart();
-  toast(`${packs} × ${grams}G ${variant.name} added to cart`);
-}
+
 function addStrainToCart(p,strain,requestedQuantity=1,weight=1){
   const packs=Math.max(1,Math.floor(Number(requestedQuantity)||1));
   const grams=isFlowerProduct(p)?FLOWER_WEIGHTS.includes(Number(weight))?Number(weight):1:1;
