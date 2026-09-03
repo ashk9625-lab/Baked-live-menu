@@ -831,13 +831,13 @@ function normalizeCsvAction(v){
 async function downloadStockCsvTemplate(){
   try{
     const rows=await api('/rest/v1/products?select=sku,name,category,group_name,strength,price,description,image_url,stock,reorder_level,active,featured&order=group_name.asc,name.asc',{auth:true});
-    const data=[['Action','SKU','Product Name','Category','Range','Strain','Pack Size','Strength','Price','Description','Image URL','New Stock Quantity','Active','Featured','Reorder Level']];
+    const data=[['Action','SKU','Product Name','Category','Range','Strain','Pack Size','Strength','Description','Image URL','Current Stock','New Stock Quantity','Active','Featured','Reorder Level']];
     rows.forEach(p=>{
       const strains=parseStrainList(p.description), normal=splitProductDescription(p.description).description;
       if(strains.length){
-        strains.forEach(s=>data.push(['UPDATE',p.sku||'',p.name||'',p.category||'',p.group_name||'',s.name||'',s.weightGrams?`${s.weightGrams}G`:'',p.strength||'',Number(p.price||0),normal,p.image_url||'',Number(s.qty||0),p.active!==false?'TRUE':'FALSE',p.featured?'TRUE':'FALSE',Number(p.reorder_level||0)]));
+        strains.forEach(s=>data.push(['',p.sku||'',p.name||'',p.category||'',p.group_name||'',s.name||'',s.weightGrams?`${s.weightGrams}G`:'',p.strength||'',normal,p.image_url||'',Number(s.qty||0),'',p.active!==false?'TRUE':'FALSE',p.featured?'TRUE':'FALSE',Number(p.reorder_level||0)]));
       }else{
-        data.push(['UPDATE',p.sku||'',p.name||'',p.category||'',p.group_name||'','','',p.strength||'',Number(p.price||0),normal,p.image_url||'',Number(p.stock||0),p.active!==false?'TRUE':'FALSE',p.featured?'TRUE':'FALSE',Number(p.reorder_level||0)]);
+        data.push(['',p.sku||'',p.name||'',p.category||'',p.group_name||'','','',p.strength||'',normal,p.image_url||'',Number(p.stock||0),'',p.active!==false?'TRUE':'FALSE',p.featured?'TRUE':'FALSE',Number(p.reorder_level||0)]);
       }
     });
     // Blank ADD row makes the required format obvious without creating anything.
@@ -884,8 +884,10 @@ async function previewStockCsv(){
       const action=normalizeCsvAction(actionI>=0?r[actionI]:'UPDATE');
       const sku=String(r[skuI]||'').trim(),csvName=String(r[nameI]||'').trim(),strain=String(strainI>=0?r[strainI]||'':'').trim(),sizeRaw=String(sizeI>=0?r[sizeI]||'':'').trim(),raw=String(r[stockI]||'').trim();
       if(!sku&&!csvName&&!strain&&!raw)continue;
+      // Existing rows are opt-in: only rows with New Stock Quantity filled in are processed.
+      if(raw==='' && action!=='ADD')continue;
       const target=Number(raw), p=sku?bySku.get(sku.toLowerCase()):null;
-      if(!sku||!csvName||!Number.isInteger(target)||target<0){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target:raw,status:'Invalid row'});continue;}
+      if(!sku||!csvName||raw===''||!Number.isInteger(target)||target<0){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target:raw,status:'Invalid row'});continue;}
 
       if(!p){
         if(action!=='ADD'){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target,status:'Product not found — use ADD'});continue;}
