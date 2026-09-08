@@ -90,56 +90,16 @@ function splitProductDescription(raw=''){
 }
 function parseStrainLines(text=''){
   const items=[];
-  String(text||'').split(/\r?\n/).forEach(rawLine=>{
-    let line=String(rawLine||'').trim(); if(!line)return;
-
-    // Flower pack-size format entered in Admin, e.g.:
-    // DARK STAR(I)=60X1G
-    // DARK STAR(I)=40X3G
-    let v=line.match(/^(.+?)\s*=\s*(\d+(?:\.\d+)?)\s*[x×]\s*(1|2|3|5)\s*g\s*$/i);
-    if(v){
-      const name=String(v[1]||'').trim();
-      const qty=Number(v[2]);
-      const weightGrams=Number(v[3]);
-      if(name&&Number.isFinite(qty)&&qty>=0)items.push({name,qty,weightGrams,backendName:`${name} [${weightGrams}G]`});
-      return;
-    }
-
-    // Also support pack size before the strain name, e.g. 1G DARK STAR(I)=25
-    v=line.match(/^\s*(1|2|3|5)\s*g\s+(.+?)\s*(?:=|:|-)\s*(\d+(?:\.\d+)?)\s*$/i);
-    if(v){
-      const weightGrams=Number(v[1]);
-      const name=String(v[2]||'').trim();
-      const qty=Number(v[3]);
-      if(name&&Number.isFinite(qty)&&qty>=0)items.push({name,qty,weightGrams,backendName:`${name} [${weightGrams}G]`});
-      return;
-    }
-
-    // Internal stored format used so the order RPC can deduct the exact size:
-    // DARK STAR(I) [1G] = 60
-    v=line.match(/^(.+?)\s*\[(1|2|3|5)\s*g\]\s*=\s*(\d+(?:\.\d+)?)\s*$/i);
-    if(v){
-      const name=String(v[1]||'').trim();
-      const weightGrams=Number(v[2]);
-      const qty=Number(v[3]);
-      if(name&&Number.isFinite(qty)&&qty>=0)items.push({name,qty,weightGrams,backendName:`${name} [${weightGrams}G]`});
-      return;
-    }
-
-    // Standard strain stock formats.
-    let m=line.match(/^(.+?)\s*(?:=|:|-)\s*(\d+(?:\.\d+)?)\s*g?\s*$/i);
+  String(text||'').split(/\r?\n/).forEach(line=>{
+    line=line.trim(); if(!line)return;
+    let m=line.match(/^(.+?)\s*(?:=|:|-)\s*(\d+)\s*$/);
     if(!m){
-      const x=line.match(/^(\d+(?:\.\d+)?)\s*g?\s*[x×]\s*(.+?)\s*$/i);
+      const x=line.match(/^(\d+)\s*[x×]\s*(.+?)\s*$/i);
       if(x)m=[null,x[2],x[1]];
     }
-    if(!m){
-      const x=line.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*g\s*$/i);
-      if(x)m=[null,x[1],x[2]];
-    }
     if(m){
-      const name=String(m[1]||'').trim().replace(/[,:;=-]+$/,'').trim();
-      const qty=Number(m[2]);
-      if(name&&Number.isFinite(qty)&&qty>=0)items.push({name,qty,weightGrams:null,backendName:name});
+      const name=String(m[1]||'').trim(),qty=Number(m[2]);
+      if(name&&Number.isInteger(qty)&&qty>=0)items.push({name,qty});
     }
   });
   return items;
@@ -155,101 +115,56 @@ function parseStrainList(description=''){
   while((m=re.exec(text))){
     const qty=Number(m[1]);
     const name=String(m[2]||'').trim().replace(/[.,;:-]+$/,'');
-    if(qty>=0&&name)items.push({qty,name,weightGrams:null,backendName:name});
+    if(qty>=0&&name)items.push({qty,name});
   }
   return items;
 }
 function formatStrainsForAdmin(description=''){
-  return parseStrainList(description).map(s=>s.weightGrams?`${s.name}=${s.qty}X${s.weightGrams}G`:`${s.name} = ${s.qty}`).join('\n');
+  return parseStrainList(description).map(s=>`${s.name} = ${s.qty}`).join('\n');
 }
 function composeProductDescription(normalDescription='',strainText=''){
   const cleanDesc=String(normalDescription||'').trim();
   const strains=parseStrainLines(strainText);
   if(!strains.length)return cleanDesc;
-  const stored=strains.map(s=>s.weightGrams?`${s.backendName} = ${s.qty}`:`${s.name} = ${s.qty}`).join('\n');
-  return `${cleanDesc}${cleanDesc?'\n\n':''}[[STRAINS]]\n${stored}`;
+  return `${cleanDesc}${cleanDesc?'\n\n':''}[[STRAINS]]\n${strains.map(s=>`${s.name} = ${s.qty}`).join('\n')}`;
 }
-function isFlowerProduct(p){
-  return String(p?.category||'').toLowerCase().replace(/[^a-z]/g,'').includes('flower');
-}
-const FLOWER_WEIGHTS=[1,2,3,5];
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
   const strains=parseStrainList(p.description);
   if(!strains.length)return;
-  const flower=isFlowerProduct(p);
-  const sizedFlower=flower&&strains.some(s=>s.weightGrams);
-
   $('#strainModalTitle').textContent=p.name;
-  $('#strainModalSubtitle').textContent=sizedFlower?'Choose a strain and available gram size':flower?'Choose a strain, then select 1G, 2G, 3G or 5G':'Choose a strain and quantity';
-
-  if(sizedFlower){
-    // EVERY Flower pack-size entry is displayed as its own clean row:
-    // STRAIN NAME | size | quantity | Add to cart
-    const variants=strains.filter(s=>s.weightGrams);
-    $('#strainModalList').innerHTML=variants.map((s,i)=>`<div class="strain-row flower-variant-row">
-      <div class="strain-info">
-        <strong>${escapeHtml(s.name)}</strong>
-        <small>${s.weightGrams}G: ${s.qty} available</small>
-      </div>
-      <div class="flower-single-size">${s.weightGrams}G</div>
-      <input class="strain-quantity flower-variant-quantity" data-index="${i}" type="number" min="1" max="${Math.max(1,Number(s.qty||0))}" value="1" inputmode="numeric" ${Number(s.qty)<=0?'disabled':''}>
-      <button class="btn primary flower-variant-add" data-index="${i}" ${Number(s.qty)<=0?'disabled':''}>Add to cart</button>
-    </div>`).join('');
-
-    $$('.flower-variant-add').forEach(btn=>btn.onclick=()=>{
-      const i=Number(btn.dataset.index);
-      const s=variants[i];
-      const row=btn.closest('.flower-variant-row');
-      const qty=Number(row?.querySelector('.flower-variant-quantity')?.value||1);
-      addStrainToCart(p,s,qty,s.weightGrams);
-    });
-  }else{
-    $('#strainModalList').innerHTML=strains.map((s,i)=>`<div class="strain-row">
-      <div class="strain-info"><strong>${escapeHtml(s.name)}</strong><small>${s.qty} available</small></div>
-      ${flower?`<div class="flower-weight-picker" data-row="${i}">${FLOWER_WEIGHTS.map(w=>`<button type="button" class="flower-weight-btn ${w===1?'active':''}" data-weight="${w}" ${s.qty<w?'disabled':''}>${w}G</button>`).join('')}</div>`:''}
-      <input class="strain-quantity" data-index="${i}" type="number" min="1" max="${flower?Math.max(1,Math.floor(s.qty/(FLOWER_WEIGHTS.find(w=>s.qty>=w)||1))):s.qty}" value="1" inputmode="numeric">
-      <button class="btn primary strain-add" data-index="${i}" ${s.qty<=0?'disabled':''}>Add to cart</button>
-    </div>`).join('');
-
-    if(flower){
-      $$('.flower-weight-picker').forEach(picker=>{
-        picker.querySelectorAll('.flower-weight-btn').forEach(btn=>btn.onclick=()=>{
-          picker.querySelectorAll('.flower-weight-btn').forEach(x=>x.classList.remove('active'));
-          btn.classList.add('active');
-          const row=picker.closest('.strain-row'),input=row.querySelector('.strain-quantity'),s=strains[Number(picker.dataset.row)],w=Number(btn.dataset.weight||1);
-          input.max=Math.max(1,Math.floor(Number(s.qty||0)/w));
-          if(Number(input.value)>Number(input.max))input.value=input.max;
-        });
-      });
-    }
-    $$('.strain-add').forEach(btn=>btn.onclick=()=>{
-      const i=Number(btn.dataset.index),s=strains[i],row=btn.closest('.strain-row');
-      const qty=Number(row.querySelector('.strain-quantity')?.value||1);
-      const weight=flower?Number(row.querySelector('.flower-weight-btn.active')?.dataset.weight||1):null;
-      addStrainToCart(p,s,qty,weight);
-    });
-  }
-
+  $('#strainModalSubtitle').textContent='Choose a strain and quantity';
+  $('#strainModalList').innerHTML=strains.map((s,i)=>`<div class="strain-row selectable-strain">
+    <div class="strain-info">
+      <strong>${escapeHtml(s.name)}</strong>
+      <small>${s.qty} available · ${money(p.price)} each</small>
+    </div>
+    <div class="strain-order">
+      <input class="strain-order-qty" data-index="${i}" type="number" min="1" max="${s.qty}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(s.name)}">
+      <button type="button" class="btn primary strain-add" data-id="${p.id}" data-index="${i}" ${s.qty<=0?'disabled':''}>${s.qty<=0?'Out of stock':'Add to cart'}</button>
+    </div>
+  </div>`).join('');
+  $$('.strain-add').forEach(b=>b.onclick=()=>{
+    const strain=strains[Number(b.dataset.index)];
+    const input=$(`.strain-order-qty[data-index="${b.dataset.index}"]`);
+    addStrainToCart(p,strain,Number(input?.value||1));
+  });
   $('#strainModal').classList.remove('hidden');
-  $('#strainModal').setAttribute('aria-hidden','false');
   $('#drawerBackdrop').classList.remove('hidden');
 }
-
-function addStrainToCart(p,strain,requestedQuantity=1,weight=1){
-  const packs=Math.max(1,Math.floor(Number(requestedQuantity)||1));
-  const grams=isFlowerProduct(p)?FLOWER_WEIGHTS.includes(Number(weight))?Number(weight):1:1;
-  const required=packs*grams;
-  if(required>strain.qty)return toast(`Only ${strain.qty}g ${strain.name} available`);
-  const key=`${p.id}::${strain.name}::${grams}g`;
+function addStrainToCart(p,strain,requestedQuantity=1){
+  const amount=Math.max(1,Math.floor(Number(requestedQuantity)||1));
+  if(amount>strain.qty)return toast(`Only ${strain.qty} ${strain.name} available`);
+  const key=`${p.id}::${strain.name}`;
   const item=cart.find(x=>String(x.cartKey||x.id)===key);
-  const existingGrams=item?item.quantity*grams:0;
-  if(existingGrams+required>strain.qty)return toast(`Only ${Math.max(0,strain.qty-existingGrams)}g more ${strain.name} available`);
-  if(item)item.quantity+=packs;
-  else cart.push({id:p.id,cartKey:key,name:isFlowerProduct(p)?`${p.name} — ${strain.name} — ${grams}G`:`${p.name} — ${strain.name}`,parentName:p.name,strain:strain.name,weightGrams:grams,price:Number(p.price)*grams,quantity:packs,stock:Math.floor(strain.qty/grams),strainStockGrams:strain.qty});
+  const existing=item?item.quantity:0;
+  if(existing+amount>strain.qty)return toast(`Only ${Math.max(0,strain.qty-existing)} more ${strain.name} available`);
+  if(item)item.quantity+=amount;
+  else cart.push({id:p.id,cartKey:key,name:`${p.name} — ${strain.name}`,parentName:p.name,strain:strain.name,price:Number(p.price),quantity:amount,stock:strain.qty});
   persistCart();
-  toast(`${packs} × ${grams}G ${strain.name} added to cart`);
+  toast(`${amount} × ${strain.name} added to cart`);
 }
+
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=products.filter(p=>{
@@ -429,7 +344,7 @@ async function placeOrder(e){
         p_customer_name:customerName,
         p_customer_phone:customerPhone,
         p_note:note,
-        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.packSizeStock?i.quantity:(i.weightGrams?i.quantity*i.weightGrams:i.quantity),strain:i.strainBackend||i.strain||null}))
+        p_items:orderedItems.map(i=>({product_id:i.id,quantity:i.quantity,strain:i.strain||null}))
       })
     });
 
@@ -720,280 +635,103 @@ function renderFastStock(){
   fastStockProducts.forEach(p=>{
     const strains=parseStrainList(p.description);
     if(!strains.length)return;
-    const visible=strains.map((s,i)=>({s,i})).filter(x=>{
-      const size=x.s.weightGrams?`${x.s.weightGrams}g`:'';
-      return !q||`${p.name} ${p.sku||''} ${x.s.name} ${size}`.toLowerCase().includes(q);
-    });
+    const visible=strains.map((s,i)=>({s,i})).filter(x=>!q||`${p.name} ${p.sku||''} ${x.s.name}`.toLowerCase().includes(q));
     if(!visible.length)return;
-    groups.push(`<div class="fast-stock-group">
-      <div class="fast-stock-title">
-        <div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku||'')}</small></div>
-        <span class="quick-stock-product-total">${strains.reduce((a,s)=>a+Number(s.qty||0),0)} total</span>
-      </div>
-      ${visible.map(({s,i})=>{
-        const size=s.weightGrams?`<b class="quick-size-badge">${s.weightGrams}G</b>`:'';
-        return `<div class="fast-stock-row quick-stock-row">
-          <div class="quick-stock-name"><span>${escapeHtml(s.name)}</span>${size}</div>
-          <div class="quick-stock-controls">
-            <small>Current <b>${s.qty}</b></small>
-            <span class="quick-plus">+</span>
-            <input class="fast-stock-input quick-stock-add" data-product="${p.id}" data-index="${i}" data-current="${s.qty}" type="number" min="0" step="1" value="" placeholder="0" inputmode="numeric" aria-label="Add stock">
-            <small class="quick-new-total">New <b>${s.qty}</b></small>
-          </div>
-        </div>`;
-      }).join('')}
+    groups.push(`<div class="fast-stock-group"><div class="fast-stock-title"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku||'')}</small></div>
+      ${visible.map(({s,i})=>`<div class="fast-stock-row"><span>${escapeHtml(s.name)}</span><div><small>Current ${s.qty}</small><input class="fast-stock-input" data-product="${p.id}" data-index="${i}" type="number" min="0" step="1" value="${s.qty}" inputmode="numeric"></div></div>`).join('')}
     </div>`);
   });
   box.innerHTML=groups.length?groups.join(''):'<div class="empty-state"><p>No strain stock found.</p></div>';
-
-  $$('.quick-stock-add').forEach(input=>{
-    input.oninput=()=>{
-      const current=Number(input.dataset.current||0);
-      const add=Math.max(0,Number(input.value||0));
-      const row=input.closest('.quick-stock-row');
-      const total=row?.querySelector('.quick-new-total b');
-      if(total)total.textContent=current+add;
-      input.classList.toggle('has-change',add>0);
-    };
-  });
 }
 async function loadFastStock(){
   try{
-    fastStockProducts=await api('/rest/v1/products?select=id,sku,name,category,description&order=name.asc',{auth:true});
+    fastStockProducts=await api('/rest/v1/products?select=id,sku,name,description&order=name.asc',{auth:true});
     renderFastStock();
   }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function saveFastStock(){
-  const inputs=$$('.quick-stock-add');
+  const inputs=$$('.fast-stock-input');
   const byProduct=new Map();
-
   inputs.forEach(input=>{
-    const add=Number(input.value||0);
-    if(!Number.isInteger(add)||add<=0)return;
     const p=fastStockProducts.find(x=>String(x.id)===String(input.dataset.product));if(!p)return;
     const strains=parseStrainList(p.description);
-    const i=Number(input.dataset.index);
-    if(!strains[i])return;
-    strains[i].qty=Number(strains[i].qty||0)+add;
-    byProduct.set(String(p.id),{p,strains});
+    const i=Number(input.dataset.index),qty=Number(input.value);
+    if(!strains[i]||!Number.isInteger(qty)||qty<0)return;
+    strains[i].qty=qty;byProduct.set(String(p.id),{p,strains});
   });
-
-  if(!byProduct.size){toast('Enter stock to add first');return;}
-  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');
-  btn.disabled=true;
-  msg.textContent=`Adding stock to ${byProduct.size} product${byProduct.size===1?'':'s'}…`;
-  let saved=0;
+  if(!byProduct.size){toast('No strain stock to save');return;}
+  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');btn.disabled=true;msg.textContent=`Saving ${byProduct.size} product${byProduct.size===1?'':'s'}…`;let saved=0;
   try{
     for(const {p,strains} of byProduct.values()){
       const normal=splitProductDescription(p.description).description;
-      // Preserve Flower gram-size variants exactly.
-      const strainText=strains.map(s=>s.weightGrams?`${s.name}=${s.qty}X${s.weightGrams}G`:`${s.name} = ${s.qty}`).join('\n');
+      const strainText=strains.map(s=>`${s.name} = ${s.qty}`).join('\n');
       const description=composeProductDescription(normal,strainText);
-      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{
-        method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},
-        body:JSON.stringify({description,updated_at:new Date().toISOString()})
-      });
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
       saved++;
     }
-    toast('Stock added');
-    msg.textContent=`Stock added successfully to ${saved} product${saved===1?'':'s'}.`;
+    toast('Strain stock updated');msg.textContent=`Saved ${saved} product${saved===1?'':'s'} successfully.`;
     await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
-    if(typeof updateAdminAlerts==='function')updateAdminAlerts();
-  }catch(err){
-    msg.textContent=`Saved ${saved} before an error: ${err.message}`;
-    toast('Some stock could not be added');
-  }finally{btn.disabled=false;}
+  }catch(err){msg.textContent=`Saved ${saved} before an error: ${err.message}`;toast('Some strain stock could not be saved');}
+  finally{btn.disabled=false;}
 }
 
 let stockCsvChanges = [];
+let stockCsvNewProducts = [];
 
 function csvEscape(v){
   v=String(v??'');
   return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
 }
-function normalizeCsvKey(v){
-  return String(v??'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[^a-z0-9()]+/g,' ').trim();
-}
-function normalizePackSize(v){
-  const m=String(v??'').trim().toUpperCase().match(/^(1|2|3|5)\s*G?$/);
-  return m?Number(m[1]):null;
-}
-function csvBool(v, fallback=false){
-  const x=String(v??'').trim().toLowerCase();
-  if(!x)return fallback;
-  return ['1','true','yes','y','on','active'].includes(x);
-}
-function normalizeCsvAction(v){
-  const x=String(v??'').trim().toUpperCase().replace(/[^A-Z]/g,'');
-  if(['ADD','NEW','CREATE','ADDPRODUCT','ADDSTRAIN'].includes(x))return 'ADD';
-  return 'UPDATE';
-}
 async function downloadStockCsvTemplate(){
   try{
-    const rows=await api('/rest/v1/products?select=sku,name,category,group_name,strength,price,description,image_url,stock,reorder_level,active,featured&order=group_name.asc,name.asc',{auth:true});
-    const data=[['Action','SKU','Product Name','Category','Range','Strain','Pack Size','Strength','Description','Image URL','Current Stock','New Stock Quantity','Active','Featured','Reorder Level']];
-    rows.forEach(p=>{
-      const strains=parseStrainList(p.description), normal=splitProductDescription(p.description).description;
-      if(strains.length){
-        strains.forEach(s=>data.push(['',p.sku||'',p.name||'',p.category||'',p.group_name||'',s.name||'',s.weightGrams?`${s.weightGrams}G`:'',p.strength||'',normal,p.image_url||'',Number(s.qty||0),'',p.active!==false?'TRUE':'FALSE',p.featured?'TRUE':'FALSE',Number(p.reorder_level||0)]));
-      }else{
-        data.push(['',p.sku||'',p.name||'',p.category||'',p.group_name||'','','',p.strength||'',normal,p.image_url||'',Number(p.stock||0),'',p.active!==false?'TRUE':'FALSE',p.featured?'TRUE':'FALSE',Number(p.reorder_level||0)]);
-      }
-    });
-    // Blank ADD row makes the required format obvious without creating anything.
-    data.push(['ADD','','','','','','','','','','','0','TRUE','FALSE','0']);
-    const csv='\ufeff'+data.map(r=>r.map(csvEscape).join(',')).join('\r\n');
+    const rows=await api('/rest/v1/products?select=sku,name,category,group_name,strength,price,stock,reorder_level,description,active,featured&order=group_name.asc,name.asc',{auth:true});
+    const data=[['SKU','Product Name','Category','Range','Strength','Price','New Stock Quantity','Reorder Level','Description','Active','Featured'],
+      ...rows.map(p=>[p.sku||'',p.name||'',p.category||'',p.group_name||'',p.strength||'',Number(p.price||0),Number(p.stock||0),Number(p.reorder_level||0),p.description||'',p.active!==false,p.featured===true])];
+    const csv=data.map(r=>r.map(csvEscape).join(',')).join('\r\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BAKED-PRODUCTS-AND-STOCK-MASTER.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='BAKED-PRODUCT-STOCK-UPLOAD.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   }catch(err){toast(err.message);}
 }
 function parseCsv(text){
-  text=String(text||'').replace(/^\uFEFF/,'');
-  // Excel in some regional settings exports semicolon-delimited CSVs. Detect either format.
-  const firstLine=(text.split(/\r?\n/,1)[0]||'');
-  const delimiter=(firstLine.split(';').length>firstLine.split(',').length)?';':',';
   const rows=[];let row=[],cell='',quoted=false;
-  for(let i=0;i<text.length;i++){
-    const ch=text[i];
-    if(ch==='"'){
-      if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;
-    }else if(ch===delimiter&&!quoted){row.push(cell.trim());cell='';}
-    else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);row=[];cell='';}
-    else cell+=ch;
-  }
+  for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(ch===','&&!quoted){row.push(cell.trim());cell='';}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);row=[];cell='';}else cell+=ch;}
   row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);return rows;
 }
+function csvBool(v,def=false){v=String(v??'').trim().toLowerCase();if(!v)return def;return ['true','yes','1','y'].includes(v);}
 async function previewStockCsv(){
   const file=$('#stockCsvFile')?.files?.[0];if(!file){toast('Choose a CSV file first');return;}
-  const msg=$('#stockCsvMessage'),box=$('#stockCsvPreview'),btn=$('#applyStockCsvButton');
-  msg.textContent='Checking CSV…';box.innerHTML='';btn.disabled=true;stockCsvChanges=[];
+  const msg=$('#stockCsvMessage'),box=$('#stockCsvPreview'),btn=$('#applyStockCsvButton');msg.textContent='Checking CSV…';box.innerHTML='';btn.disabled=true;stockCsvChanges=[];stockCsvNewProducts=[];
   try{
-    const rows=parseCsv(await file.text());if(rows.length<2)throw new Error('CSV has no product or stock rows.');
-    const h=rows[0].map(x=>String(x||'').replace(/^\uFEFF/,'').toLowerCase().replace(/[^a-z0-9]/g,''));
+    const rows=parseCsv(await file.text());if(rows.length<2)throw new Error('CSV has no product rows.');
+    const h=rows[0].map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,''));
     const ix=(...names)=>h.findIndex(x=>names.includes(x));
-    const actionI=ix('action'),skuI=ix('sku'),nameI=ix('productname','product','name'),categoryI=ix('category'),groupI=ix('range','group','groupname'),strainI=ix('strain','strainname'),sizeI=ix('packsize','size','grams','gramsize'),strengthI=ix('strength'),priceI=ix('price'),descI=ix('description','productdescription'),imageI=ix('imageurl','image'),stockI=ix('newstockquantity','stockquantity','stock','quantity','qty'),activeI=ix('active'),featuredI=ix('featured'),reorderI=ix('reorderlevel','reorder');
+    const skuI=ix('sku'),nameI=ix('productname','product','name'),catI=ix('category'),rangeI=ix('range','group','groupname'),strengthI=ix('strength'),priceI=ix('price'),stockI=ix('newstockquantity','stock','quantity','qty'),reorderI=ix('reorderlevel','reorder'),descI=ix('description'),activeI=ix('active'),featuredI=ix('featured');
     if(skuI<0||nameI<0||stockI<0)throw new Error('CSV needs SKU, Product Name and New Stock Quantity columns.');
-
-    const products=await api('/rest/v1/products?select=id,sku,name,category,group_name,strength,price,description,image_url,stock,reorder_level,active,featured&order=name.asc',{auth:true});
-    const bySku=new Map(products.filter(p=>p.sku).map(p=>[String(p.sku).trim().toLowerCase(),p]));
-    const working=new Map();
-    const preview=[];
-    const newProducts=new Map();
-
+    const products=await api('/rest/v1/products?select=*&order=name.asc',{auth:true});
+    const bySku=new Map(products.filter(p=>p.sku).map(p=>[String(p.sku).trim().toLowerCase(),p]));const preview=[];
     for(const r of rows.slice(1)){
-      const action=normalizeCsvAction(actionI>=0?r[actionI]:'UPDATE');
-      const sku=String(r[skuI]||'').trim(),csvName=String(r[nameI]||'').trim(),strain=String(strainI>=0?r[strainI]||'':'').trim(),sizeRaw=String(sizeI>=0?r[sizeI]||'':'').trim(),raw=String(r[stockI]||'').trim();
-      if(!sku&&!csvName&&!strain&&!raw)continue;
-      // Existing rows are opt-in: only rows with New Stock Quantity filled in are processed.
-      if(raw==='' && action!=='ADD')continue;
-      const target=Number(raw), p=sku?bySku.get(sku.toLowerCase()):null;
-      if(!sku||!csvName||raw===''||!Number.isInteger(target)||target<0){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target:raw,status:'Invalid row'});continue;}
-
-      if(!p){
-        if(action!=='ADD'){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target,status:'Product not found — use ADD'});continue;}
-        if(!newProducts.has(sku.toLowerCase())){
-          const category=String(categoryI>=0?r[categoryI]||'':'').trim();
-          const price=Number(priceI>=0?r[priceI]||'':NaN);
-          if(!category||!Number.isFinite(price)||price<0){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target,status:'ADD needs Category and Price'});continue;}
-          newProducts.set(sku.toLowerCase(),{
-            sku,name:csvName,category,
-            group_name:String(groupI>=0?r[groupI]||'':'').trim(),
-            strength:String(strengthI>=0?r[strengthI]||'':'').trim(),
-            price, description:String(descI>=0?r[descI]||'':'').trim(), image_url:String(imageI>=0?r[imageI]||'':'').trim()||null,
-            reorder_level:Number(reorderI>=0&&String(r[reorderI]||'').trim()!==''?r[reorderI]:0)||0,
-            active:csvBool(activeI>=0?r[activeI]:'TRUE',true), featured:csvBool(featuredI>=0?r[featuredI]:'FALSE',false),
-            stock:0,strains:[]
-          });
-        }
-        const np=newProducts.get(sku.toLowerCase());
-        if(normalizeCsvKey(np.name)!==normalizeCsvKey(csvName)){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target,status:'Same new SKU has different product name'});continue;}
-        if(strain){
-          const pack=normalizePackSize(sizeRaw);
-          if(sizeRaw&&pack===null){preview.push({sku,name:csvName,item:`${strain} ${sizeRaw}`,current:'—',target,status:'Invalid pack size'});continue;}
-          if(np.strains.some(s=>normalizeCsvKey(s.name)===normalizeCsvKey(strain)&&Number(s.weightGrams||0)===Number(pack||0))){preview.push({sku,name:csvName,item:strain,current:'—',target,status:'Duplicate ADD row'});continue;}
-          np.strains.push({name:strain,qty:target,weightGrams:pack,backendName:pack?`${strain} [${pack}G]`:strain});
-          preview.push({sku,name:csvName,item:`${strain}${pack?` ${pack}G`:''}`,current:'NEW',target,status:'Add new product / strain'});
-        }else{
-          np.stock=target;
-          preview.push({sku,name:csvName,item:'Product stock',current:'NEW',target,status:'Add new product'});
-        }
-        continue;
-      }
-
-      if(normalizeCsvKey(csvName)!==normalizeCsvKey(p.name)){preview.push({sku,name:csvName,item:strain||'Product',current:'—',target,status:'Product name does not match SKU'});continue;}
-      if(!working.has(String(p.id)))working.set(String(p.id),{p,strains:parseStrainList(p.description).map(s=>({...s})),normal:splitProductDescription(p.description).description,productTarget:null,changed:false});
-      const w=working.get(String(p.id));
-
-      if(strain){
-        const pack=normalizePackSize(sizeRaw), wanted=normalizeCsvKey(strain);
-        if(sizeRaw&&pack===null){preview.push({sku,name:p.name,item:`${strain} ${sizeRaw}`,current:'—',target,status:'Invalid pack size'});continue;}
-        const matches=w.strains.map((s,i)=>({s,i})).filter(x=>normalizeCsvKey(x.s.name)===wanted && (pack===null ? x.s.weightGrams===null : Number(x.s.weightGrams)===pack));
-        if(matches.length===1){
-          const {s,i}=matches[0],current=Number(s.qty||0);
-          preview.push({sku,name:p.name,item:`${s.name}${s.weightGrams?` ${s.weightGrams}G`:''}`,current,target,status:current===target?'No change':'Update'});
-          if(current!==target){w.strains[i].qty=target;w.changed=true;}
-        }else if(matches.length===0&&action==='ADD'){
-          w.strains.push({name:strain,qty:target,weightGrams:pack,backendName:pack?`${strain} [${pack}G]`:strain});w.changed=true;
-          preview.push({sku,name:p.name,item:`${strain}${pack?` ${pack}G`:''}`,current:'NEW',target,status:'Add strain'});
-        }else{
-          preview.push({sku,name:p.name,item:`${strain}${sizeRaw?` ${sizeRaw}`:''}`,current:'—',target,status:matches.length?'Duplicate strain match':'Strain / pack size not found — use ADD'});
-        }
-      }else if(w.strains.length){
-        preview.push({sku,name:p.name,item:'—',current:'—',target,status:'Strain required for this product'});
-      }else{
-        const current=Number(p.stock||0);
-        preview.push({sku,name:p.name,item:'Product stock',current,target,status:current===target?'No change':'Update'});
-        if(current!==target){w.productTarget=target;w.changed=true;}
+      const sku=String(r[skuI]||'').trim(),name=String(r[nameI]||'').trim(),raw=String(r[stockI]||'').trim();if(!sku&&!name&&!raw)continue;
+      const target=Number(raw);if(!sku||!name||!Number.isInteger(target)||target<0){preview.push({sku,name,current:'—',target:raw,status:'Invalid row'});continue;}
+      const p=bySku.get(sku.toLowerCase());
+      if(p){const diff=target-Number(p.stock||0);preview.push({sku,name:p.name,current:Number(p.stock||0),target,status:diff===0?'No change':'Update stock'});if(diff!==0)stockCsvChanges.push({id:p.id,sku,name:p.name,diff});}
+      else{
+        const price=priceI>=0?Number(r[priceI]||0):0;if(!Number.isFinite(price)||price<0){preview.push({sku,name,current:'NEW',target,status:'Invalid price'});continue;}
+        const payload={sku,name,category:catI>=0?String(r[catI]||'').trim():'',group_name:rangeI>=0?String(r[rangeI]||'').trim():'',strength:strengthI>=0?String(r[strengthI]||'').trim():'',price,stock:target,reorder_level:reorderI>=0?Number(r[reorderI]||0):0,description:descI>=0?String(r[descI]||'').trim():'',image_url:null,active:activeI>=0?csvBool(r[activeI],true):true,featured:featuredI>=0?csvBool(r[featuredI],false):false,updated_at:new Date().toISOString()};
+        stockCsvNewProducts.push(payload);preview.push({sku,name,current:'NEW',target,status:'Create product'});
       }
     }
-
-    for(const w of working.values()){
-      if(!w.changed)continue;
-      if(w.strains.length){
-        const strainText=w.strains.map(s=>s.weightGrams?`${s.name}=${s.qty}X${s.weightGrams}G`:`${s.name} = ${s.qty}`).join('\n');
-        const description=composeProductDescription(w.normal,strainText), totalStock=w.strains.reduce((a,s)=>a+Number(s.qty||0),0);
-        stockCsvChanges.push({type:'update',id:w.p.id,sku:w.p.sku,name:w.p.name,description,targetStock:totalStock,currentStock:Number(w.p.stock||0),kind:'strains'});
-      }else if(w.productTarget!==null){
-        stockCsvChanges.push({type:'update',id:w.p.id,sku:w.p.sku,name:w.p.name,targetStock:w.productTarget,currentStock:Number(w.p.stock||0),kind:'product'});
-      }
-    }
-    for(const np of newProducts.values()){
-      if(np.strains.length){
-        const strainText=np.strains.map(s=>s.weightGrams?`${s.name}=${s.qty}X${s.weightGrams}G`:`${s.name} = ${s.qty}`).join('\n');
-        np.description=composeProductDescription(np.description,strainText);
-        np.stock=np.strains.reduce((a,s)=>a+Number(s.qty||0),0);
-      }
-      stockCsvChanges.push({type:'add',payload:np,sku:np.sku,name:np.name});
-    }
-
-    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>SKU</span><span>Product / Strain</span><span>Current</span><span>New</span><span>Action</span></div>${preview.map(x=>`<div class="csv-line"><span>${escapeHtml(x.sku)}</span><span>${escapeHtml(`${x.name}${x.item?` — ${x.item}`:''}`)}</span><span>${escapeHtml(x.current)}</span><span>${escapeHtml(x.target)}</span><span>${escapeHtml(x.status)}</span></div>`).join('')}</div>`:'<div class="empty-state"><p>No rows found.</p></div>';
-    const updates=stockCsvChanges.filter(x=>x.type==='update').length, adds=stockCsvChanges.filter(x=>x.type==='add').length;
-    msg.textContent=stockCsvChanges.length?`${updates} existing product${updates===1?'':'s'} to update · ${adds} new product${adds===1?'':'s'} to add.`:'No changes found.';
-    btn.disabled=!stockCsvChanges.length;
-  }catch(err){msg.textContent=err.message;box.innerHTML='';btn.disabled=true;stockCsvChanges=[];}
+    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>SKU</span><span>Product</span><span>Current</span><span>New</span><span>Action</span></div>${preview.map(x=>`<div class="csv-line"><span>${escapeHtml(x.sku)}</span><span>${escapeHtml(x.name)}</span><span>${escapeHtml(x.current)}</span><span>${escapeHtml(x.target)}</span><span>${escapeHtml(x.status)}</span></div>`).join('')}</div>`:'<div class="empty-state"><p>No rows found.</p></div>';
+    const total=stockCsvChanges.length+stockCsvNewProducts.length;msg.textContent=total?`${stockCsvChanges.length} stock update${stockCsvChanges.length===1?'':'s'} and ${stockCsvNewProducts.length} new product${stockCsvNewProducts.length===1?'':'s'} ready.`:'No changes or new products found.';btn.disabled=!total;
+  }catch(err){msg.textContent=err.message;box.innerHTML='';btn.disabled=true;}
 }
 async function applyStockCsv(){
-  if(!stockCsvChanges.length)return;
-  const btn=$('#applyStockCsvButton'),msg=$('#stockCsvMessage');btn.disabled=true;msg.textContent=`Applying ${stockCsvChanges.length} CSV change${stockCsvChanges.length===1?'':'s'}…`;let done=0;
+  const total=stockCsvChanges.length+stockCsvNewProducts.length;if(!total)return;const btn=$('#applyStockCsvButton'),msg=$('#stockCsvMessage');btn.disabled=true;msg.textContent=`Processing ${total} item${total===1?'':'s'}…`;let updated=0,created=0;
   try{
-    for(const c of stockCsvChanges){
-      if(c.type==='add'){
-        const p=c.payload;
-        await api('/rest/v1/products',{method:'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({sku:p.sku,name:p.name,category:p.category,group_name:p.group_name,strength:p.strength,price:p.price,stock:p.stock,reorder_level:p.reorder_level,image_url:p.image_url,description:p.description,active:p.active,featured:p.featured,updated_at:new Date().toISOString()})});
-      }else{
-        if(c.kind==='strains')await api(`/rest/v1/products?id=eq.${encodeURIComponent(c.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description:c.description,updated_at:new Date().toISOString()})});
-        const diff=Number(c.targetStock)-Number(c.currentStock);
-        if(diff!==0)await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:diff,p_reference:'CSV Products & Stock Upload'})});
-      }
-      done++;
-    }
-    toast(`${done} CSV change${done===1?'':'s'} applied`);
-    msg.textContent=`Done: ${done} change${done===1?'':'s'} applied. Live menu refreshed.`;
-    stockCsvChanges=[];$('#stockCsvPreview').innerHTML='';$('#stockCsvFile').value='';
-    await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
-    if(typeof updateAdminAlerts==='function')updateAdminAlerts();
-  }catch(err){msg.textContent=`Completed ${done} change${done===1?'':'s'} before an error: ${err.message}`;toast('CSV import stopped because of an error');}
-  finally{btn.disabled=!stockCsvChanges.length;}
+    for(const c of stockCsvChanges){await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'CSV Stock Upload'})});updated++;}
+    for(const p of stockCsvNewProducts){await api('/rest/v1/products',{method:'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});created++;}
+    toast(`${updated} updated · ${created} new products added`);msg.textContent=`Done: ${updated} stock updated and ${created} new product${created===1?'':'s'} created.`;stockCsvChanges=[];stockCsvNewProducts=[];$('#stockCsvPreview').innerHTML='';$('#stockCsvFile').value='';await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){msg.textContent=`Completed ${updated} updates and ${created} new products before an error: ${err.message}`;toast('CSV import stopped because of an error');}
+  finally{btn.disabled=!(stockCsvChanges.length+stockCsvNewProducts.length);}
 }
 
 async function loadInventory(){
@@ -1163,7 +901,7 @@ function exportSalesCsv(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-sales-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='suggestions')loadSuggestions(); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
 
 function luhnValidSouthAfricanId(idNumber){
   if(!/^\d{13}$/.test(idNumber)) return false;
@@ -1279,81 +1017,6 @@ if($('#refreshStockDashboard'))$('#refreshStockDashboard').onclick=loadStockDash
 if($('#exportStockDashboard'))$('#exportStockDashboard').onclick=exportStockDashboardCsv;
 if($('#sdSearch'))$('#sdSearch').oninput=renderStockDashboard;
 if($('#sdStatus'))$('#sdStatus').onchange=renderStockDashboard;
-
-// ===== CUSTOMER SUGGESTIONS =====
-async function submitSuggestion(e){
-  e.preventDefault();
-  const name=($('#suggestionName')?.value||'').trim();
-  const suggestion=($('#suggestionText')?.value||'').trim();
-  const msg=$('#suggestionMessage');
-  const btn=$('#submitSuggestionButton');
-  if(!suggestion){ if(msg)msg.textContent='Please enter a suggestion.'; return; }
-  if(btn)btn.disabled=true;
-  if(msg)msg.textContent='Sending…';
-  try{
-    await api('/rest/v1/menu_suggestions',{
-      method:'POST',
-      headers:{Prefer:'return=minimal'},
-      body:JSON.stringify({customer_name:name||null,suggestion,status:'New'})
-    });
-    if($('#suggestionForm'))$('#suggestionForm').reset();
-    if(msg)msg.textContent='Thank you — your suggestion has been sent.';
-    toast('Suggestion sent');
-  }catch(err){
-    if(msg)msg.textContent=err.message;
-  }finally{
-    if(btn)btn.disabled=false;
-  }
-}
-
-async function loadSuggestions(){
-  const box=$('#adminSuggestions');
-  if(!box||!accessToken)return;
-  box.innerHTML='<div class="empty-state"><p>Loading suggestions…</p></div>';
-  try{
-    const rows=await api('/rest/v1/menu_suggestions?select=id,customer_name,suggestion,status,created_at&order=created_at.desc&limit=200',{auth:true})||[];
-    const fresh=rows.filter(r=>String(r.status||'New').toLowerCase()==='new').length;
-    const count=$('#suggestionAdminCount');
-    if(count){count.textContent=fresh;count.classList.toggle('hidden',fresh===0);}
-    box.innerHTML=rows.length?rows.map(r=>`<article class="admin-row suggestion-admin-row">
-      <div class="admin-row-main">
-        <span class="admin-icon">💡</span>
-        <div>
-          <strong>${escapeHtml(r.customer_name||'Anonymous')}</strong>
-          <small>${new Date(r.created_at).toLocaleString('en-ZA')} · ${escapeHtml(r.status||'New')}</small>
-          <p class="suggestion-copy">${escapeHtml(r.suggestion||'')}</p>
-        </div>
-      </div>
-      <div class="admin-row-data">
-        <button class="btn ghost compact suggestion-status" data-id="${r.id}" data-status="${String(r.status||'New').toLowerCase()==='new'?'Reviewed':'New'}">${String(r.status||'New').toLowerCase()==='new'?'Mark reviewed':'Mark new'}</button>
-        <button class="btn danger compact suggestion-delete" data-id="${r.id}">Delete</button>
-      </div>
-    </article>`).join(''):'<div class="empty-state"><h3>No suggestions yet</h3><p>Customer suggestions will appear here.</p></div>';
-    $$('.suggestion-status').forEach(b=>b.onclick=()=>setSuggestionStatus(b.dataset.id,b.dataset.status));
-    $$('.suggestion-delete').forEach(b=>b.onclick=()=>deleteSuggestion(b.dataset.id));
-  }catch(err){
-    box.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;
-  }
-}
-async function setSuggestionStatus(id,status){
-  try{
-    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({status})});
-    await loadSuggestions();
-  }catch(err){toast(err.message);}
-}
-async function deleteSuggestion(id){
-  if(!confirm('Delete this suggestion?'))return;
-  try{
-    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',auth:true,headers:{Prefer:'return=minimal'}});
-    toast('Suggestion deleted');
-    await loadSuggestions();
-  }catch(err){toast(err.message);}
-}
-
-
-if($('#suggestionForm'))$('#suggestionForm').onsubmit=submitSuggestion;
-if($('#refreshSuggestionsButton'))$('#refreshSuggestionsButton').onclick=loadSuggestions;
-
 if($('#adminAlertsButton'))$('#adminAlertsButton').onclick=openAdminAlerts;
 if($('#printPackingSlipButton'))$('#printPackingSlipButton').onclick=()=>printPackingSlip();
 if($('#alertsGoOrders'))$('#alertsGoOrders').onclick=()=>{closeOverlays();switchAdminTab('orders');};
