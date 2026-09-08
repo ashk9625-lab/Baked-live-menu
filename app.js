@@ -173,10 +173,12 @@ function renderProducts(){
   });
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
-    const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strains=parseStrainList(p.description);
+    const availableStock=strains.length?strains.reduce((sum,s)=>sum+Number(s.qty||0),0):Number(p.stock||0);
+    const effectiveProduct={...p,stock:availableStock};
+    const [state,label]=stockState(effectiveProduct), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
-    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
+    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${availableStock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${availableStock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(availableStock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${availableStock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(availableStock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(availableStock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&parseStrainList(p.description).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
   $$('.product-quantity').forEach(i=>i.onclick=e=>e.stopPropagation());
@@ -394,7 +396,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); await updateAdminAlerts(); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers(),loadAdminSuggestions()]); await updateAdminAlerts(); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -901,7 +903,52 @@ function exportSalesCsv(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-sales-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
+
+async function submitMenuSuggestion(e){
+  e.preventDefault();
+  const name=$('#suggestionName')?.value.trim()||'';
+  const suggestion=$('#suggestionText')?.value.trim()||'';
+  const message=$('#suggestionMessage');
+  const button=$('#suggestionSubmitButton');
+  if(!suggestion){if(message)message.textContent='Please enter your suggestion.';return;}
+  if(message)message.textContent='Sending suggestion…';
+  if(button)button.disabled=true;
+  try{
+    await api('/rest/v1/menu_suggestions',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({customer_name:name||null,suggestion,status:'New'})});
+    if($('#suggestionForm'))$('#suggestionForm').reset();
+    if(message)message.textContent='Thank you — your suggestion was sent to Baked Admin.';
+    toast('Suggestion sent');
+  }catch(err){
+    if(message)message.textContent=err.message||'Could not send suggestion.';
+  }finally{if(button)button.disabled=false;}
+}
+async function loadAdminSuggestions(){
+  const list=$('#adminSuggestions');
+  if(!list)return;
+  list.innerHTML='<div class="empty-state"><p>Loading suggestions…</p></div>';
+  try{
+    const rows=await api('/rest/v1/menu_suggestions?select=*&order=created_at.desc',{auth:true});
+    list.innerHTML=rows.length?rows.map(r=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(r.customer_name||'Anonymous customer')}</strong><small>${new Date(r.created_at).toLocaleString('en-ZA')}</small></div><select class="suggestion-status" data-id="${r.id}">${['New','Reviewed','Done'].map(s=>`<option ${String(r.status||'New')===s?'selected':''}>${s}</option>`).join('')}</select></div><p class="order-note">${escapeHtml(r.suggestion)}</p><div class="admin-row-data"><button class="btn danger compact delete-suggestion" type="button" data-id="${r.id}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No suggestions yet</h3><p>Customer suggestions will appear here.</p></div>';
+    $$('.suggestion-status').forEach(s=>s.onchange=()=>updateSuggestionStatus(s.dataset.id,s.value));
+    $$('.delete-suggestion').forEach(b=>b.onclick=()=>deleteSuggestion(b.dataset.id));
+  }catch(err){list.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
+}
+async function updateSuggestionStatus(id,status){
+  try{
+    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({status})});
+    toast('Suggestion updated');
+  }catch(err){toast(err.message);await loadAdminSuggestions();}
+}
+async function deleteSuggestion(id){
+  if(!confirm('Delete this suggestion?'))return;
+  try{
+    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',auth:true,headers:{Prefer:'return=minimal'}});
+    toast('Suggestion deleted');
+    await loadAdminSuggestions();
+  }catch(err){toast(err.message);}
+}
+
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); if(tab==='suggestions')loadAdminSuggestions(); }
 
 function luhnValidSouthAfricanId(idNumber){
   if(!/^\d{13}$/.test(idNumber)) return false;
@@ -974,6 +1021,9 @@ $('#leaveSite').onclick=()=>location.href='https://www.google.com';
 }
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; 
+if($('#suggestionForm'))$('#suggestionForm').onsubmit=submitMenuSuggestion;
+if($('#refreshSuggestionsButton'))$('#refreshSuggestionsButton').onclick=loadAdminSuggestions;
+
 
 /* ===== SURPRISE ME ===== */
 function openSurpriseMe(){

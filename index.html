@@ -97,6 +97,17 @@
       <div id="categoryChips" class="chips"></div>
       <div id="status" class="status">Loading live stock…</div>
       <section id="productGrid" class="product-grid"></section>
+      <section class="panel" style="width:min(760px,92vw);margin:28px auto 54px;padding:24px;">
+        <p class="eyebrow accent">HELP US IMPROVE</p>
+        <h2>Suggestions & Ideas</h2>
+        <p class="admin-help">Tell us what you would like to see added or improved on the Baked Live Menu.</p>
+        <form id="suggestionForm" class="form-stack">
+          <label>Your name <input id="suggestionName" maxlength="80" placeholder="Optional"></label>
+          <label>Your suggestion <textarea id="suggestionText" rows="4" maxlength="600" required placeholder="Share your idea or suggestion…"></textarea></label>
+          <button id="suggestionSubmitButton" class="btn primary wide" type="submit">Send Suggestion</button>
+        </form>
+        <p id="suggestionMessage" class="form-message"></p>
+      </section>
     </section>
 
     <section id="adminView" class="admin-view hidden">
@@ -139,7 +150,7 @@
           <button class="admin-tab" data-tab="inventory">Inventory</button>
           <button class="admin-tab" data-tab="sales">Sales</button>
           <button class="admin-tab" data-tab="stockdashboard">Stock Dashboard</button>
-          <button class="admin-tab" data-tab="suggestions">Suggestions <span id="suggestionAdminCount" class="suggestion-count hidden">0</span></button>
+          <button class="admin-tab" data-tab="suggestions">Suggestions</button>
           <button class="admin-tab" data-tab="settings">Settings</button>
           <button class="admin-tab" data-tab="users">Admin Users</button>
         </div>
@@ -161,14 +172,14 @@
         <section id="inventoryTab" class="admin-tab-panel hidden">
           <div class="fast-stock-card">
   <div class="admin-toolbar">
-    <div><h3>Quick Stock</h3><p class="admin-help">Existing strains and gram sizes load automatically. Only type the quantity you are adding.</p></div>
+    <div><h3>Fast Stock</h3><p class="admin-help">Update all strain quantities without opening each product.</p></div>
     <button id="refreshFastStockButton" class="btn ghost" type="button">Refresh</button>
   </div>
-  <div class="fast-stock-search"><input id="fastStockSearch" type="search" placeholder="Search product, strain or gram size…"></div>
+  <div class="fast-stock-search"><input id="fastStockSearch" type="search" placeholder="Search product or strain…"></div>
   <div id="fastStockList" class="fast-stock-list"></div>
   <div class="fast-stock-footer">
     <span id="fastStockMessage" class="form-message"></span>
-    <button id="saveFastStockButton" class="btn primary" type="button">ADD STOCK</button>
+    <button id="saveFastStockButton" class="btn primary" type="button">SAVE ALL STOCK</button>
   </div>
 </div>
 <div class="inventory-divider"></div>
@@ -176,14 +187,14 @@
             <div class="admin-toolbar">
               <div>
                 <h3>CSV Products & Stock</h3>
-                <p class="admin-help">Use one CSV to update existing stock, add new strains, or add completely new products.</p>
+                <p class="admin-help">Use one CSV to update existing stock or add completely new products.</p>
               </div>
-              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Products & Stock Template</button>
+              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Product Template</button>
             </div>
             <div class="csv-stock-controls">
               <input id="stockCsvFile" type="file" accept=".csv,text/csv">
               <button id="previewStockCsvButton" class="btn ghost" type="button">Preview CSV</button>
-              <button id="applyStockCsvButton" class="btn primary" type="button" disabled>APPLY CSV</button>
+              <button id="applyStockCsvButton" class="btn primary" type="button" disabled>UPDATE STOCK</button>
             </div>
             <p id="stockCsvMessage" class="form-message"></p>
             <div id="stockCsvPreview" class="csv-preview"></div>
@@ -263,19 +274,12 @@
           <div class="sales-section-head"><div><h4>Recent Stock Movements</h4><p>Orders, restocks, adjustments and stocktakes.</p></div></div><div id="stockDashboardHistory" class="sales-recent"></div><p id="stockDashboardMessage" class="form-message"></p>
         </section>
 
-        
         <section id="suggestionsTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar">
-            <div>
-              <h3>Customer Suggestions</h3>
-              <p class="admin-help">Suggestions submitted from the live menu appear here.</p>
-            </div>
-            <button id="refreshSuggestionsButton" class="btn ghost" type="button">Refresh</button>
-          </div>
+          <div class="admin-toolbar"><div><h3>Customer Suggestions</h3><p class="admin-help">Ideas submitted from the live menu.</p></div><button id="refreshSuggestionsButton" class="btn ghost" type="button">Refresh</button></div>
           <div id="adminSuggestions" class="admin-list"></div>
         </section>
 
-<section id="settingsTab" class="admin-tab-panel hidden">
+        <section id="settingsTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Store Settings</h3><span id="settingsStatus" class="status-inline"></span></div>
           <form id="settingsForm" class="settings-grid">
             <label class="switch-row"><span><strong>Store open</strong><small>Turn ordering on or off immediately.</small></span><input id="settingStoreOpen" type="checkbox"></label>
@@ -399,23 +403,6 @@
     <div id="surpriseResult"></div>
   </div>
 </div>
-
-<section id="suggestionSection" class="suggestion-section">
-  <div class="suggestion-card">
-    <div>
-      <p class="eyebrow accent">HELP US IMPROVE</p>
-      <h2>Suggestions</h2>
-      <p class="muted">Have an idea for the Baked Live Menu? Send it to us.</p>
-    </div>
-    <form id="suggestionForm" class="suggestion-form">
-      <input id="suggestionName" type="text" maxlength="80" placeholder="Your name (optional)">
-      <textarea id="suggestionText" rows="3" maxlength="1000" required placeholder="Type your suggestion..."></textarea>
-      <button id="submitSuggestionButton" class="btn primary" type="submit">Send suggestion</button>
-      <span id="suggestionMessage" class="form-message"></span>
-    </form>
-  </div>
-</section>
-
 <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span><span>STRICTLY 18+ ONLY. No persons under 18 may use this live menu.</span>
 </footer>
   <script src="app.js"></script>
