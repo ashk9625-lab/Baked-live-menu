@@ -128,6 +128,53 @@ function composeProductDescription(normalDescription='',strainText=''){
   if(!strains.length)return cleanDesc;
   return `${cleanDesc}${cleanDesc?'\n\n':''}[[STRAINS]]\n${strains.map(s=>`${s.name} = ${s.qty}`).join('\n')}`;
 }
+function getSavedStrainLibrary(){
+  const names=new Map();
+  const add=name=>{
+    const clean=String(name||'').trim().replace(/\s+/g,' ');
+    if(clean&&!names.has(clean.toLowerCase()))names.set(clean.toLowerCase(),clean);
+  };
+  try{(JSON.parse(localStorage.getItem('baked-strain-library')||'[]')||[]).forEach(add);}catch{}
+  (products||[]).forEach(p=>parseStrainList(p.description).forEach(s=>add(s.name)));
+  return [...names.values()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}));
+}
+function saveNamesToStrainLibrary(strains=[]){
+  const names=new Map(getSavedStrainLibrary().map(n=>[n.toLowerCase(),n]));
+  strains.forEach(s=>{const n=String(s.name||'').trim().replace(/\s+/g,' ');if(n)names.set(n.toLowerCase(),n);});
+  localStorage.setItem('baked-strain-library',JSON.stringify([...names.values()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}))));
+}
+function refreshStrainLibraryDatalist(){
+  const list=$('#strainLibraryList');if(!list)return;
+  list.innerHTML=getSavedStrainLibrary().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
+}
+function syncProductStrainText(){
+  const rows=[...document.querySelectorAll('#productStrainRows .product-strain-entry')];
+  const strains=rows.map(row=>({
+    name:row.querySelector('.product-strain-name')?.value.trim()||'',
+    qty:Number(row.querySelector('.product-strain-qty')?.value||0)
+  })).filter(s=>s.name&&Number.isInteger(s.qty)&&s.qty>=0);
+  const field=$('#productStrains');if(field)field.value=strains.map(s=>`${s.name} = ${s.qty}`).join('\n');
+  return strains;
+}
+function addProductStrainRow(strain={name:'',qty:0}){
+  const box=$('#productStrainRows');if(!box)return;
+  const row=document.createElement('div');
+  row.className='product-strain-entry';
+  row.style.cssText='display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end';
+  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" list="strainLibraryList" autocomplete="off" placeholder="Search or type strain" value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
+  box.appendChild(row);
+  row.querySelectorAll('input').forEach(input=>input.addEventListener('input',syncProductStrainText));
+  row.querySelector('.remove-product-strain').onclick=()=>{row.remove();syncProductStrainText();};
+  refreshStrainLibraryDatalist();
+}
+function renderProductStrainManager(strains=[]){
+  const box=$('#productStrainRows');if(!box)return;
+  box.innerHTML='';
+  refreshStrainLibraryDatalist();
+  if(strains.length)strains.forEach(addProductStrainRow);
+  else addProductStrainRow({name:'',qty:0});
+  syncProductStrainText();
+}
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
   const strains=parseStrainList(p.description);
@@ -573,11 +620,12 @@ async function deleteProduct(id,name,button,sku=''){
 
 function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
-  if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productStrains').value=formatStrainsForAdmin(p.description);$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
+  if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
+  renderProductStrainManager(p?parseStrainList(p.description):[]);
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
-  e.preventDefault(); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
+  e.preventDefault(); const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
   try{ await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)}); closeOverlays(); toast(id?'Product updated':'Product added'); await Promise.all([loadAdminProducts(),loadProducts()]); }catch(err){ $('#productFormMessage').textContent=err.message; }
 }
@@ -1369,3 +1417,6 @@ if('serviceWorker' in navigator){
   window.openProductImage=openProductImage;
   window.closeProductImage=closeProductImage;
 })();
+
+// Saved strain manager
+document.addEventListener('click',e=>{if(e.target?.id==='addProductStrainRow'){e.preventDefault();addProductStrainRow({name:'',qty:0});const rows=$$('#productStrainRows .product-strain-name');rows[rows.length-1]?.focus();}});
