@@ -533,6 +533,7 @@ function openOrderDetail(id){
 function printPackingSlip(order=selectedOrderDetail){
   if(!order)return toast('Open an order first');
   const items=order.order_items||[];
+  const totalPieces=items.reduce((sum,i)=>sum+Number(i.quantity||0),0);
   const rows=items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
   const w=window.open('','_blank','width=900,height=800');
   if(!w)return toast('Allow pop-ups to print the packing slip');
@@ -544,13 +545,14 @@ function printPackingSlip(order=selectedOrderDetail){
   .info{display:grid;grid-template-columns:1fr 1fr;gap:8px 30px;margin:20px 0}.info div{border-bottom:1px solid #ddd;padding:8px 0}
   table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #bbb;padding:13px;text-align:left}th{background:#f1f1f1}
   th:nth-child(2),td:nth-child(2){width:110px;text-align:center}th:nth-child(3),td:nth-child(3){width:150px;text-align:center}
-  .packing-box{height:34px}.notes{margin-top:20px;border:1px solid #ccc;padding:14px;min-height:55px}
+  .packing-box{height:34px}.pieces-total{margin-top:12px;border:2px solid #111;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:900}.notes{margin-top:20px;border:1px solid #ccc;padding:14px;min-height:55px}
   .sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:55px}.line{border-top:1px solid #111;padding-top:7px;font-size:12px}
   button{margin-top:25px;padding:10px 18px}@media print{button{display:none}body{padding:5px}}
   </style></head><body>
   <div class="head"><div><div class="brand">BAKED AFRICA</div><div class="sub">ORDER & PACKING SHEET</div></div><div><strong>${escapeHtml(order.order_number)}</strong><div class="sub">${new Date(order.created_at).toLocaleString('en-ZA')}</div></div></div>
   <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>Contact:</strong> ${escapeHtml(order.customer_phone||'')}</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
   <table><thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Packing Qty</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="pieces-total"><span>TOTAL NUMBER OF PIECES</span><strong>${totalPieces}</strong></div>
   <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(order.note||'')}</div>
   <div class="sign"><div class="line">Packed by / Signature</div><div class="line">Checked by / Signature</div></div>
   <button onclick="window.print()">Print Packing Slip</button>
