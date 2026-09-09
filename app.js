@@ -165,12 +165,41 @@ function addStrainToCart(p,strain,requestedQuantity=1){
   toast(`${amount} × ${strain.name} added to cart`);
 }
 
+function preRollDisplayRank(p){
+  const category=displayCategory(p.category).toLowerCase();
+  if(!category.includes('pre-roll'))return 9999;
+  const text=`${p.name||''} ${p.group_name||''}`.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  const isMini=/\bmini\b/.test(text);
+  const isKing=/\bking\b/.test(text);
+  const isTp=/\b(tp|tube|tubes)\b/.test(text);
+  const ranges=['outdoor','yellow','orange','green','silver','gold','platinum','hash'];
+  let rangeIndex=ranges.findIndex(r=>text.includes(r));
+  if(rangeIndex<0)rangeIndex=ranges.length;
+  // King ranges first (normal then TP), followed by Mini ranges.
+  if(isKing)return rangeIndex*10+(isTp?1:0);
+  if(isMini)return 100+rangeIndex*10+(isTp?1:0);
+  return 200+rangeIndex*10+(isTp?1:0);
+}
+function sortLiveProducts(list){
+  return [...list].sort((a,b)=>{
+    const aPre=displayCategory(a.category).toLowerCase().includes('pre-roll');
+    const bPre=displayCategory(b.category).toLowerCase().includes('pre-roll');
+    if(aPre&&bPre){
+      const rank=preRollDisplayRank(a)-preRollDisplayRank(b);
+      if(rank)return rank;
+      return String(a.name||'').localeCompare(String(b.name||''),undefined,{numeric:true,sensitivity:'base'});
+    }
+    if(aPre!==bPre)return aPre?-1:1;
+    return `${displayCategory(a.category)} ${a.group_name||''} ${a.name||''}`.localeCompare(`${displayCategory(b.category)} ${b.group_name||''} ${b.name||''}`,undefined,{numeric:true,sensitivity:'base'});
+  });
+}
+
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
-  const shown=products.filter(p=>{
+  const shown=sortLiveProducts(products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
     return (!term||hay.includes(term))&&(cat==='all'||displayCategory(p.category)===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
-  });
+  }));
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const strains=parseStrainList(p.description);
@@ -611,7 +640,70 @@ function openAdminAlerts(){
   $('#drawerBackdrop').classList.remove('hidden');
 }
 
-async function setOrderStatus(id,status){ try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:status})});toast('Order status updated');await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);}catch(err){toast(err.message);await loadOrders();} }
+async function adjustOrderInventoryForCancellation(order, direction=1){
+  // direction +1 returns stock on cancellation; -1 deducts it again if a cancellation is reversed.
+  const items=order?.order_items||[];
+  for(const item of items){
+    const qty=Math.max(0,Number(item.quantity||0));
+    if(!qty)continue;
+    const productId=item.product_id||item.product?.id;
+    if(!productId)throw new Error(`Could not identify product for ${item.product_name||'order item'}`);
+
+    const productRows=await api(`/rest/v1/products?select=*&id=eq.${encodeURIComponent(productId)}&limit=1`,{auth:true});
+    const product=productRows?.[0];
+    if(!product)throw new Error(`Product no longer exists: ${item.product_name||productId}`);
+
+    const strains=parseStrainList(product.description);
+    const displayedName=String(item.product_name||'');
+    const strainName=displayedName.includes(' — ')?displayedName.split(' — ').slice(1).join(' — ').trim():'';
+    const strainIndex=strainName?strains.findIndex(s=>s.name.toLowerCase()===strainName.toLowerCase()):-1;
+
+    if(strainIndex>=0){
+      const parts=splitProductDescription(product.description);
+      const updated=strains.map((strain,index)=>({
+        ...strain,
+        qty:index===strainIndex?Math.max(0,Number(strain.qty||0)+(direction*qty)):Number(strain.qty||0)
+      }));
+      const description=composeProductDescription(parts.description,updated.map(s=>`${s.name} = ${s.qty}`).join('\n'));
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(productId)}`,{
+        method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},
+        body:JSON.stringify({description,updated_at:new Date().toISOString()})
+      });
+    }else{
+      await api('/rest/v1/rpc/adjust_stock',{
+        method:'POST',auth:true,
+        body:JSON.stringify({
+          p_product_id:productId,
+          p_quantity:direction*qty,
+          p_reference:direction>0?`Cancelled order ${order.order_number||''} - stock returned`:`Reopened order ${order.order_number||''} - stock deducted again`
+        })
+      });
+    }
+  }
+}
+
+async function setOrderStatus(id,status){
+  const order=adminOrdersCache.find(o=>String(o.id)===String(id));
+  const previousStatus=String(order?.status||'Pending');
+  const nextStatus=String(status||previousStatus);
+  if(previousStatus===nextStatus)return;
+  try{
+    await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:nextStatus})});
+    try{
+      if(nextStatus==='Cancelled'&&previousStatus!=='Cancelled')await adjustOrderInventoryForCancellation(order,1);
+      if(previousStatus==='Cancelled'&&nextStatus!=='Cancelled')await adjustOrderInventoryForCancellation(order,-1);
+    }catch(stockErr){
+      // Keep status and stock in sync if restoration/deduction fails.
+      try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:previousStatus})});}catch{}
+      throw stockErr;
+    }
+    toast(nextStatus==='Cancelled'?'Order cancelled — stock returned':'Order status updated');
+    await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){
+    toast(err.message);
+    await loadOrders();
+  }
+}
 async function deleteOrder(id,number){
   if(!confirm(`Permanently delete order ${number}?\n\nThis cannot be undone and will not change current stock.`))return;
   try{await api('/rest/v1/rpc/delete_order_admin',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id})});toast(`Order ${number} deleted`);await loadOrders();}catch(err){toast(err.message);}
