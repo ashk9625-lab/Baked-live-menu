@@ -285,24 +285,36 @@ function sendOrderToLockedWhatsApps(message, firstWindow=null){
   });
 }
 
+function extractNsftPoNo(note){
+  const text=String(note||'');
+  const match=text.match(/(?:^|\n)NSFT PO NO:\s*([^\n]*)/i);
+  return match ? match[1].trim() : '';
+}
+function cleanOrderNote(note){
+  return String(note||'').replace(/(?:^|\n)NSFT PO NO:\s*[^\n]*(?:\n|$)/i,'\n').trim();
+}
+
 function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
   const total = orderedItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
   const itemLines = orderedItems.map(item =>
     `${item.quantity} x ${item.name} - ${money(Number(item.price) * Number(item.quantity))}`
   );
 
+  const nsftPoNo=extractNsftPoNo(note);
+  const customerNote=cleanOrderNote(note);
   return [
     '*NEW BAKED LIVE MENU ORDER*',
     '',
     `Order: ${orderNo}`,
     `Customer: ${customerName}`,
     `Phone: ${customerPhone}`,
+    nsftPoNo ? `NSFT PO No: ${nsftPoNo}` : '',
     '',
     '*Items:*',
     ...itemLines,
     '',
     `*Total: ${money(total)}*`,
-    note ? `Note: ${note}` : '',
+    customerNote ? `Note: ${customerNote}` : '',
     '',
     'Please confirm availability and collection/delivery details.'
   ].filter(Boolean).join('\n');
@@ -316,7 +328,7 @@ function printInvoice(order=lastOrderForInvoice){
   const total=order.items.reduce((sum,item)=>sum+item.price*item.quantity,0);
   const invoiceWindow=window.open('','_blank','width=900,height=750');
   if(!invoiceWindow) return toast('Allow pop-ups to print the invoice');
-  invoiceWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${escapeHtml(order.orderNo)}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;max-width:850px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #111;padding-bottom:20px;margin-bottom:25px}.brand{font-size:28px;font-weight:800}.muted{color:#666}table{width:100%;border-collapse:collapse;margin-top:25px}th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}th{background:#f3f3f3}.total{font-size:20px;font-weight:800;text-align:right;margin-top:25px}.note{margin-top:25px;padding:15px;background:#f7f7f7}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="brand">BAKED AFRICA</div><div class="muted">Live Menu Order Invoice</div></div><div><strong>Invoice ${escapeHtml(order.orderNo)}</strong><br><span class="muted">${new Date(order.createdAt).toLocaleString('en-ZA')}</span></div></div><p><strong>Customer:</strong> ${escapeHtml(order.customerName)}<br><strong>Cellphone:</strong> ${escapeHtml(order.customerPhone)}</p><table><thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${money(total)}</div>${order.note?`<div class="note"><strong>Order note:</strong><br>${escapeHtml(order.note)}</div>`:''}<p class="muted" style="margin-top:35px">Thank you for your order. This invoice confirms the order request and is subject to final stock confirmation.</p><button onclick="window.print()">Print invoice</button></body></html>`);
+  invoiceWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${escapeHtml(order.orderNo)}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;max-width:850px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #111;padding-bottom:20px;margin-bottom:25px}.brand{font-size:28px;font-weight:800}.muted{color:#666}table{width:100%;border-collapse:collapse;margin-top:25px}th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}th{background:#f3f3f3}.total{font-size:20px;font-weight:800;text-align:right;margin-top:25px}.note{margin-top:25px;padding:15px;background:#f7f7f7}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="brand">BAKED AFRICA</div><div class="muted">Live Menu Order Invoice</div></div><div><strong>Invoice ${escapeHtml(order.orderNo)}</strong><br><span class="muted">${new Date(order.createdAt).toLocaleString('en-ZA')}</span></div></div><p><strong>Customer:</strong> ${escapeHtml(order.customerName)}<br><strong>Cellphone:</strong> ${escapeHtml(order.customerPhone)}${extractNsftPoNo(order.note)?`<br><strong>NSFT PO No:</strong> ${escapeHtml(extractNsftPoNo(order.note))}`:''}</p><table><thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${money(total)}</div>${cleanOrderNote(order.note)?`<div class="note"><strong>Order note:</strong><br>${escapeHtml(cleanOrderNote(order.note))}</div>`:''}<p class="muted" style="margin-top:35px">Thank you for your order. This invoice confirms the order request and is subject to final stock confirmation.</p><button onclick="window.print()">Print invoice</button></body></html>`);
   invoiceWindow.document.close();
   invoiceWindow.focus();
   setTimeout(()=>invoiceWindow.print(),300);
@@ -328,7 +340,9 @@ async function placeOrder(e){
   const btn=$('#placeOrderButton');
   const customerName=$('#customerName').value.trim();
   const customerPhone=LOCKED_ORDER_CONTACT_NUMBER;
-  const note=$('#customerNote').value.trim();
+  const nsftPoNo=$('#nsftPoNo')?.value.trim()||'';
+  const customerNote=$('#customerNote').value.trim();
+  const note=[nsftPoNo ? `NSFT PO NO: ${nsftPoNo}` : '', customerNote].filter(Boolean).join('\n');
   const orderedItems=cart.map(item=>({...item}));
 
   // Open a blank tab immediately so browsers do not block WhatsApp after the database request.
@@ -513,7 +527,8 @@ function openOrderDetail(id){
   $('#orderDetailContent').innerHTML=`
     <div class="order-detail-meta">
       <div><span>Customer</span><strong>${escapeHtml(order.customer_name||'')}</strong></div>
-      <div><span>Contact</span><strong>${escapeHtml(order.customer_phone||'')}</strong></div>
+      <div><span>BAKED CSS</span><strong>____________________</strong></div>
+      <div><span>NSFT PO No</span><strong>${escapeHtml(extractNsftPoNo(order.note)||'—')}</strong></div>
       <div><span>Date</span><strong>${new Date(order.created_at).toLocaleString('en-ZA')}</strong></div>
       <div><span>Status</span><strong>${escapeHtml(order.status||'Pending')}</strong></div>
     </div>
@@ -523,7 +538,7 @@ function openOrderDetail(id){
         <tbody>${items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td>${money(i.unit_price)}</td><td>${money(i.line_total)}</td></tr>`).join('')}</tbody>
       </table>
     </div>
-    ${order.note?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(order.note)}</p></div>`:''}
+    ${cleanOrderNote(order.note)?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(cleanOrderNote(order.note))}</p></div>`:''}
     <div class="order-detail-total"><span>Order Total</span><strong>${money(order.total)}</strong></div>`;
   $('#orderDetailModal').classList.remove('hidden');
   $('#orderDetailModal').setAttribute('aria-hidden','false');
@@ -550,10 +565,10 @@ function printPackingSlip(order=selectedOrderDetail){
   button{margin-top:25px;padding:10px 18px}@media print{button{display:none}body{padding:5px}}
   </style></head><body>
   <div class="head"><div><div class="brand">BAKED AFRICA</div><div class="sub">ORDER & PACKING SHEET</div></div><div><strong>${escapeHtml(order.order_number)}</strong><div class="sub">${new Date(order.created_at).toLocaleString('en-ZA')}</div></div></div>
-  <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>Contact:</strong> ${escapeHtml(order.customer_phone||'')}</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
+  <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>NSFT PO NO:</strong> ${escapeHtml(extractNsftPoNo(order.note)||'____________________')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>BAKED CSS:</strong> ____________________</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
   <table><thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Packing Qty</th></tr></thead><tbody>${rows}</tbody></table>
   <div class="pieces-total"><span>TOTAL NUMBER OF PIECES</span><strong>${totalPieces}</strong></div>
-  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(order.note||'')}</div>
+  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(cleanOrderNote(order.note)||'')}</div>
   <div class="sign"><div class="line">Packed by / Signature</div><div class="line">Checked by / Signature</div></div>
   <button onclick="window.print()">Print Packing Slip</button>
   </body></html>`);
