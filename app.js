@@ -204,16 +204,48 @@ function preRollDisplayRank(p){
   }
   return 1000;
 }
+function flowerDisplayRank(p){
+  const category=displayCategory(p.category).toLowerCase();
+  if(!category.includes('flower'))return 9999;
+  const text=`${p.name||''} ${p.group_name||''}`.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  const sequence=['orange flower','green flower','silver flower','gold flower','platinum flower'];
+  for(let i=0;i<sequence.length;i++){
+    const label=sequence[i];
+    if(text.includes(label))return i;
+    // Also support products where the range and Flower are split between name/group/category.
+    const range=label.replace(' flower','');
+    if(text.includes(range))return i;
+  }
+  return 1000;
+}
+function productCategoryRank(p){
+  const category=displayCategory(p.category).toLowerCase();
+  if(category.includes('pre-roll'))return 0;
+  if(category.includes('flower'))return 1;
+  if(category.includes('edible'))return 3;
+  return 2;
+}
 function sortLiveProducts(list){
   return [...list].sort((a,b)=>{
-    const aPre=displayCategory(a.category).toLowerCase().includes('pre-roll');
-    const bPre=displayCategory(b.category).toLowerCase().includes('pre-roll');
+    const aCategory=displayCategory(a.category).toLowerCase();
+    const bCategory=displayCategory(b.category).toLowerCase();
+    const categoryRank=productCategoryRank(a)-productCategoryRank(b);
+    if(categoryRank)return categoryRank;
+
+    const aPre=aCategory.includes('pre-roll');
+    const bPre=bCategory.includes('pre-roll');
     if(aPre&&bPre){
       const rank=preRollDisplayRank(a)-preRollDisplayRank(b);
       if(rank)return rank;
-      return String(a.name||'').localeCompare(String(b.name||''),undefined,{numeric:true,sensitivity:'base'});
     }
-    if(aPre!==bPre)return aPre?-1:1;
+
+    const aFlower=aCategory.includes('flower');
+    const bFlower=bCategory.includes('flower');
+    if(aFlower&&bFlower){
+      const rank=flowerDisplayRank(a)-flowerDisplayRank(b);
+      if(rank)return rank;
+    }
+
     return `${displayCategory(a.category)} ${a.group_name||''} ${a.name||''}`.localeCompare(`${displayCategory(b.category)} ${b.group_name||''} ${b.name||''}`,undefined,{numeric:true,sensitivity:'base'});
   });
 }
