@@ -1132,3 +1132,75 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js').catch(console.error);
   });
 }
+
+/* BAKED Live Menu — product image enlarge / lightbox fix */
+(function(){
+  let imageLightbox=null;
+
+  function ensureImageLightbox(){
+    if(imageLightbox) return imageLightbox;
+
+    const style=document.createElement('style');
+    style.id='baked-image-lightbox-styles';
+    style.textContent=`
+      .baked-image-lightbox{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:24px;opacity:1;transition:opacity .18s ease}
+      .baked-image-lightbox.hidden{display:none}
+      .baked-image-lightbox img{display:block;max-width:min(94vw,1200px);max-height:90vh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.55);background:#fff}
+      .baked-image-lightbox-close{position:fixed;top:18px;right:18px;width:46px;height:46px;border:0;border-radius:999px;background:rgba(255,255,255,.96);color:#111;font-size:31px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:100000}
+      .product-image img,.featured-card .product-image img{cursor:zoom-in}
+      @media(max-width:640px){.baked-image-lightbox{padding:14px}.baked-image-lightbox img{max-width:96vw;max-height:86vh;border-radius:10px}.baked-image-lightbox-close{top:12px;right:12px;width:42px;height:42px}}
+    `;
+    document.head.appendChild(style);
+
+    imageLightbox=document.createElement('div');
+    imageLightbox.id='bakedImageLightbox';
+    imageLightbox.className='baked-image-lightbox hidden';
+    imageLightbox.setAttribute('role','dialog');
+    imageLightbox.setAttribute('aria-modal','true');
+    imageLightbox.setAttribute('aria-label','Product image preview');
+    imageLightbox.innerHTML='<button class="baked-image-lightbox-close" type="button" aria-label="Close image">×</button><img alt="Product image">';
+    document.body.appendChild(imageLightbox);
+
+    imageLightbox.querySelector('.baked-image-lightbox-close').addEventListener('click',closeProductImage);
+    imageLightbox.addEventListener('click',e=>{ if(e.target===imageLightbox) closeProductImage(); });
+    return imageLightbox;
+  }
+
+  function openProductImage(src,alt){
+    if(!src) return;
+    const box=ensureImageLightbox();
+    const img=box.querySelector('img');
+    img.src=src;
+    img.alt=alt||'Product image';
+    box.classList.remove('hidden');
+    document.body.style.overflow='hidden';
+  }
+
+  function closeProductImage(){
+    const box=imageLightbox||document.getElementById('bakedImageLightbox');
+    if(!box) return;
+    box.classList.add('hidden');
+    const img=box.querySelector('img');
+    if(img) img.removeAttribute('src');
+    document.body.style.overflow='';
+  }
+
+  // Capture the image click before product-card strain click handlers can take over.
+  document.addEventListener('click',e=>{
+    const img=e.target.closest('.product-card .product-image img');
+    if(!img) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openProductImage(img.currentSrc||img.src,img.alt);
+  },true);
+
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape' && imageLightbox && !imageLightbox.classList.contains('hidden')){
+      e.preventDefault();
+      closeProductImage();
+    }
+  });
+
+  window.openProductImage=openProductImage;
+  window.closeProductImage=closeProductImage;
+})();
