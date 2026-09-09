@@ -169,16 +169,40 @@ function preRollDisplayRank(p){
   const category=displayCategory(p.category).toLowerCase();
   if(!category.includes('pre-roll'))return 9999;
   const text=`${p.name||''} ${p.group_name||''}`.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
-  const isMini=/\bmini\b/.test(text);
-  const isKing=/\bking\b/.test(text);
+
+  // Exact Baked pre-roll display sequence requested.
+  const sequence=[
+    ['king outdoor', false],
+    ['king outdoor', true],
+    ['king yellow', false],
+    ['king yellow', true],
+    ['mini yellow', null],
+    ['king orange', false],
+    ['king orange', true],
+    ['mini orange', null],
+    ['king green', false],
+    ['king green', true],
+    ['mini green', null],
+    ['king silver', false],
+    ['king silver', true],
+    ['mini silver', null],
+    ['king gold', false],
+    ['king gold', true],
+    ['mini gold', null],
+    ['king platinum', false],
+    ['mini platinum', null],
+    ['king exotic', null],
+    ['mini exotic', null]
+  ];
   const isTp=/\b(tp|tube|tubes)\b/.test(text);
-  const ranges=['outdoor','yellow','orange','green','silver','gold','platinum','hash'];
-  let rangeIndex=ranges.findIndex(r=>text.includes(r));
-  if(rangeIndex<0)rangeIndex=ranges.length;
-  // King ranges first (normal then TP), followed by Mini ranges.
-  if(isKing)return rangeIndex*10+(isTp?1:0);
-  if(isMini)return 100+rangeIndex*10+(isTp?1:0);
-  return 200+rangeIndex*10+(isTp?1:0);
+  for(let i=0;i<sequence.length;i++){
+    const [label,tpRequired]=sequence[i];
+    if(!text.includes(label))continue;
+    if(tpRequired===true && !isTp)continue;
+    if(tpRequired===false && isTp)continue;
+    return i;
+  }
+  return 1000;
 }
 function sortLiveProducts(list){
   return [...list].sort((a,b)=>{
