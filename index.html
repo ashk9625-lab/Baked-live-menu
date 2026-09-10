@@ -146,7 +146,6 @@
         </div>
         <div class="admin-tabs">
           <button class="admin-tab active" data-tab="products">Products</button>
-          <button class="admin-tab" data-tab="strains">Master Strains</button>
           <button class="admin-tab" data-tab="orders">Orders</button>
           <button class="admin-tab" data-tab="inventory">Inventory</button>
           <button class="admin-tab" data-tab="sales">Sales</button>
@@ -159,20 +158,6 @@
         <section id="productsTab" class="admin-tab-panel">
           <div class="admin-toolbar"><h3>Products</h3><button id="addProductButton" class="btn primary">+ Add product</button></div>
           <div id="adminProducts" class="admin-list"></div>
-        </section>
-
-        <section id="strainsTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar">
-            <div><h3>Master Strains</h3><p class="admin-help">Save every strain once, then reuse it when adding products or stock.</p></div>
-          </div>
-          <div style="display:grid;grid-template-columns:minmax(180px,1fr) 150px auto;gap:8px;align-items:end;margin-bottom:12px">
-            <label style="margin:0">Strain name<input id="masterStrainName" placeholder="e.g. Blue Cheese"></label>
-            <label style="margin:0">Type<select id="masterStrainType"><option value="">Not set</option><option value="S">Sativa (S)</option><option value="I">Indica (I)</option><option value="H">Hybrid (H)</option></select></label>
-            <button id="addMasterStrainButton" class="btn primary" type="button">+ SAVE STRAIN</button>
-          </div>
-          <div class="fast-stock-search"><input id="masterStrainSearch" type="search" placeholder="Search saved strains…"></div>
-          <p id="masterStrainMessage" class="form-message"></p>
-          <div id="masterStrainList" class="admin-list"></div>
         </section>
 
         <section id="ordersTab" class="admin-tab-panel hidden">
@@ -346,12 +331,7 @@
         <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
         <label class="full">Description<textarea id="productDescription" rows="3" placeholder="Optional normal product description"></textarea></label>
         <div class="full" id="productStrainManager" style="display:grid;gap:10px">
-          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Choose from Master Strains. You only type a strain once in the Master Strains section.</small></div>
-          <div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end">
-            <label style="margin:0">Saved strain<select id="productSavedStrain"><option value="">Select strain…</option></select></label>
-            <label style="margin:0">Quantity<input id="productSavedStrainQty" type="number" min="0" step="1" inputmode="numeric" value="0"></label>
-            <button type="button" class="btn primary compact" id="addSavedStrainToProduct">+ ADD</button>
-          </div>
+          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Type the strain name and quantity directly below.</small></div>
           <datalist id="strainLibraryList"></datalist>
           <div id="productStrainRows" style="display:grid;gap:8px"></div>
           <textarea id="productStrains" class="hidden" aria-hidden="true" tabindex="-1"></textarea>
