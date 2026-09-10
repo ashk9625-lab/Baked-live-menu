@@ -147,6 +147,79 @@ function refreshStrainLibraryDatalist(){
   const list=$('#strainLibraryList');if(!list)return;
   list.innerHTML=getSavedStrainLibrary().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
 }
+function parseStrainType(name=''){
+  const m=String(name||'').trim().match(/\(([SIH])\)\s*$/i);
+  return m?m[1].toUpperCase():'';
+}
+function stripStrainType(name=''){
+  return String(name||'').trim().replace(/\s*\(([SIH])\)\s*$/i,'').trim();
+}
+function getMasterStrains(){
+  const map=new Map();
+  const add=(name,type='')=>{
+    const base=stripStrainType(name).replace(/\s+/g,' ').trim();
+    const t=(type||parseStrainType(name)||'').toUpperCase();
+    if(!base)return;
+    const key=base.toLowerCase();
+    const current=map.get(key);
+    if(!current||(!current.type&&t))map.set(key,{name:base,type:['S','I','H'].includes(t)?t:''});
+  };
+  try{(JSON.parse(localStorage.getItem('baked-master-strains')||'[]')||[]).forEach(x=>typeof x==='string'?add(x):add(x.name,x.type));}catch{}
+  getSavedStrainLibrary().forEach(n=>add(n));
+  (products||[]).forEach(p=>parseStrainList(p.description).forEach(st=>add(st.name)));
+  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}));
+}
+function saveMasterStrains(list){
+  localStorage.setItem('baked-master-strains',JSON.stringify(list));
+  const names=list.map(x=>`${x.name}${x.type?` (${x.type})`:''}`);
+  localStorage.setItem('baked-strain-library',JSON.stringify(names));
+  refreshStrainLibraryDatalist();
+  refreshProductSavedStrainSelect();
+}
+function displayMasterStrain(st){return `${st.name}${st.type?` (${st.type})`:''}`;}
+function refreshProductSavedStrainSelect(){
+  const sel=$('#productSavedStrain');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">Select strain…</option>'+getMasterStrains().map(st=>`<option value="${escapeHtml(displayMasterStrain(st))}">${escapeHtml(displayMasterStrain(st))}</option>`).join('');
+  if([...sel.options].some(o=>o.value===current))sel.value=current;
+}
+function renderMasterStrains(){
+  const box=$('#masterStrainList');if(!box)return;
+  const q=String($('#masterStrainSearch')?.value||'').trim().toLowerCase();
+  const all=getMasterStrains();
+  const rows=all.filter(st=>!q||displayMasterStrain(st).toLowerCase().includes(q));
+  box.innerHTML=rows.length?rows.map(st=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${escapeHtml(st.type||'•')}</span><div><strong>${escapeHtml(st.name)}</strong><small>${st.type?escapeHtml(st.type==='S'?'Sativa':st.type==='I'?'Indica':'Hybrid'):'Type not set'}</small></div></div><div class="admin-row-data"><button class="btn danger compact delete-master-strain" data-name="${escapeHtml(st.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><p>No saved strains found.</p></div>';
+  $$('.delete-master-strain').forEach(b=>b.onclick=()=>{
+    const name=b.dataset.name;
+    saveMasterStrains(getMasterStrains().filter(st=>st.name.toLowerCase()!==String(name).toLowerCase()));
+    renderMasterStrains();
+    const msg=$('#masterStrainMessage');if(msg)msg.textContent=`${name} removed from Master Strains.`;
+  });
+}
+function addMasterStrain(){
+  const input=$('#masterStrainName'),type=$('#masterStrainType'),msg=$('#masterStrainMessage');
+  const name=stripStrainType(input?.value||'').replace(/\s+/g,' ').trim();
+  const t=String(type?.value||'').toUpperCase();
+  if(!name){if(msg)msg.textContent='Enter a strain name.';return;}
+  const list=getMasterStrains();
+  const i=list.findIndex(st=>st.name.toLowerCase()===name.toLowerCase());
+  const item={name,type:['S','I','H'].includes(t)?t:''};
+  if(i>=0)list[i]={...list[i],...item};else list.push(item);
+  saveMasterStrains(list.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})));
+  if(input)input.value='';if(type)type.value='';if(msg)msg.textContent=`${displayMasterStrain(item)} saved.`;
+  renderMasterStrains();
+}
+function addSelectedMasterStrainToProduct(){
+  const sel=$('#productSavedStrain');
+  const qty=Number($('#productSavedStrainQty')?.value||0);
+  const name=String(sel?.value||'').trim();
+  if(!name)return toast('Select a saved strain');
+  if(!Number.isInteger(qty)||qty<0)return toast('Enter a valid quantity');
+  const existing=$$('#productStrainRows .product-strain-entry').find(r=>(r.querySelector('.product-strain-name')?.value||'').trim().toLowerCase()===name.toLowerCase());
+  if(existing){existing.querySelector('.product-strain-qty').value=qty;syncProductStrainText();toast('Strain quantity updated');}
+  else addProductStrainRow({name,qty});
+  if(sel)sel.value='';if($('#productSavedStrainQty'))$('#productSavedStrainQty').value='0';
+}
 function syncProductStrainText(){
   const rows=[...document.querySelectorAll('#productStrainRows .product-strain-entry')];
   const strains=rows.map(row=>({
@@ -161,7 +234,7 @@ function addProductStrainRow(strain={name:'',qty:0}){
   const row=document.createElement('div');
   row.className='product-strain-entry';
   row.style.cssText='display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end';
-  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" list="strainLibraryList" autocomplete="off" placeholder="Search or type strain" value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
+  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" readonly value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
   box.appendChild(row);
   row.querySelectorAll('input').forEach(input=>input.addEventListener('input',syncProductStrainText));
   row.querySelector('.remove-product-strain').onclick=()=>{row.remove();syncProductStrainText();};
@@ -623,6 +696,7 @@ function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
   if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
   renderProductStrainManager(p?parseStrainList(p.description):[]);
+  refreshProductSavedStrainSelect();
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
@@ -1270,6 +1344,7 @@ function runSurpriseMe(){
 }
 
 $('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
+$('#masterStrainSearch')&&($('#masterStrainSearch').oninput=renderMasterStrains); $('#addMasterStrainButton')&&($('#addMasterStrainButton').onclick=addMasterStrain); $('#addSavedStrainToProduct')&&($('#addSavedStrainToProduct').onclick=addSelectedMasterStrainToProduct);
 $('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 if($('#refreshSalesButton'))$('#refreshSalesButton').onclick=loadSales;
@@ -1294,7 +1369,7 @@ if($('#surpriseButton')) $('#surpriseButton').onclick=openSurpriseMe;
 if($('#surpriseClose')) $('#surpriseClose').onclick=closeSurpriseMe;
 if($('#surpriseGo')) $('#surpriseGo').onclick=runSurpriseMe;
 if($('#surpriseModal')) $('#surpriseModal').onclick=e=>{if(e.target===$('#surpriseModal'))closeSurpriseMe();};
-loadSiteSettings().then(loadProducts);
+loadSiteSettings().then(loadProducts).then(()=>{renderMasterStrains();refreshProductSavedStrainSelect();});
 // Robust strain popup closing
 document.addEventListener('click',e=>{
   if(e.target.closest('#strainModal [data-close]')){e.preventDefault();e.stopPropagation();closeStrainModal();return;}
