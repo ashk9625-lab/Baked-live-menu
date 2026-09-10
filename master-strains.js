@@ -1,516 +1,742 @@
 /*
- * BAKED LIVE MENU — MASTER STRAINS
- * Upload this file into the same folder as app.js and load it AFTER app.js:
- * <script src="master-strains.js"></script>
- *
- * Features:
- * - Stores a reusable master strain catalogue.
- * - Remembers new strains in localStorage on the browser/device.
- * - Provides search + add helpers for admin dropdowns.
- * - Existing names are not duplicated.
+ * BAKED LIVE MENU — MASTER STRAINS + RANGE
+ * Stores strain name, S/I/H type and Baked range(s).
+ * Ranges: Outdoor, Yellow, Orange, Green, Silver, Gold, Platinum.
+ * A strain may belong to more than one range.
  */
 
 (function () {
   'use strict';
 
+  const BAKED_RANGES = ['Outdoor','Yellow','Orange','Green','Silver','Gold','Platinum'];
   const BUILT_IN_STRAINS = [
   {
     "name": "Alien Cookies",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Amaretto Sours",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Amnesia Haze",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Atomic Bomb",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Atomic Dreams",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Atomic Jelly",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Outdoor",
+      "Gold"
+    ]
   },
   {
     "name": "Bad Decisions",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Baked Alaska",
-    "type": ""
+    "type": "",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Baker's Delight",
-    "type": ""
+    "type": "",
+    "ranges": [
+      "Platinum"
+    ]
   },
   {
     "name": "Barney Zkittles",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Platinum"
+    ]
   },
   {
     "name": "Black Cherry Punch",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Black Dawg",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blackberry Moonrocks",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blockberry",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Blockhead Berry",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blue Cheese",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Blue Dreams",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Outdoor",
+      "Platinum"
+    ]
   },
   {
     "name": "Blue Java",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blue Zushi",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blueberry Cheesecake",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blueberry Gelato",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Blueberry Hashplant",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Blueberry Muffin",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Blueberry Sugar",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Brazilian Baker",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Bubba Kush",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Candy Pavé",
-    "type": ""
+    "type": "",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Cheesy Balls",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Outdoor"
+    ]
   },
   {
     "name": "Cherry Driver",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Cherry Whip",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Cicada Stratus",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "CitraDelic Sunset",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Confi Cheese",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Cookie Dough",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Platinum"
+    ]
   },
   {
     "name": "Cookies & Cream",
-    "type": "H"
+    "type": "H",
+    "ranges": []
   },
   {
     "name": "Cream Soda",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Outdoor"
+    ]
   },
   {
     "name": "Crystal Lobster",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Curious Cheese",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Dairy Queen",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Dark Star",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Platinum"
+    ]
   },
   {
     "name": "Devil's Peak",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Dirty Bath",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Dosi Dos",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Double Stuffed Sorbet",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "El Chapo",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Exo Cheese",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Exodus Cheese",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Exodus Kush",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Eye Candy",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Fantasea",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Fruit King",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Fruit Stripez",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Fudge",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Gas Face",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Gas Face Monkey",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Golden Tiger",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Grape Bubblegum",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Grape Daddy",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Grape Marmalade",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Helplessly Hoping",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Platinum"
+    ]
   },
   {
     "name": "Huckleberry",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Ice Cream Cake",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Jack Blue Dreams",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Jedi Apples",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Jetters Diesel",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Jungle Cake",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Jungle Pie",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Killer Tiger",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Outdoor"
+    ]
   },
   {
     "name": "Lemon Haze",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Lemon Pop Tart",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Lemon Strawz",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Lemon Thai",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Love Potion",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Mac Diesel",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Malibu Marker",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Melonade",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Orange Jilly Bean",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Oreo Cookies",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Persian Baker",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Pineapple Express",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Platinum"
+    ]
   },
   {
     "name": "Pink Grapefruit",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Platinum Kush Breath",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Platinum Punch",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Platinum Wreck",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Polar Pop",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Rainbow Belt",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Ripped Off Runtz",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Rubies",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Ruby Rose",
-    "type": "H"
+    "type": "H",
+    "ranges": []
   },
   {
     "name": "Scented Marker",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Scratch and Sniff",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Sherbacio",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "Soda Float",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Sorbet Dreams",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Sour Apples",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Sour Rings",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Space Cake",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Space Panda",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Space Queen",
-    "type": "S"
+    "type": "S",
+    "ranges": []
   },
   {
     "name": "Strawberry Cough",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Strawberry OG",
-    "type": "H"
+    "type": "H",
+    "ranges": []
   },
   {
     "name": "Sundae Driver",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Sundae Driver OG",
-    "type": "H"
+    "type": "H",
+    "ranges": []
   },
   {
     "name": "Sunset Sherbet",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Sunset Sherbet #2",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Super Lemon Haze",
-    "type": "S"
+    "type": "S",
+    "ranges": []
   },
   {
     "name": "Superberry",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Tahoe Snow",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Temptation",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Thai Tiger",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Outdoor"
+    ]
   },
   {
     "name": "The New",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Green"
+    ]
   },
   {
     "name": "Toxic Tongue",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Tropical Punch",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Orange"
+    ]
   },
   {
     "name": "Tsunami",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Tutti Fruity",
-    "type": "S"
+    "type": "S",
+    "ranges": [
+      "Gold"
+    ]
   },
   {
     "name": "UK Cheese",
-    "type": "H"
+    "type": "H",
+    "ranges": [
+      "Yellow"
+    ]
   },
   {
     "name": "Unicorn Dream",
-    "type": "I"
+    "type": "I",
+    "ranges": [
+      "Silver"
+    ]
   },
   {
     "name": "Very Berry Haze",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Watermelon Martini",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "White Russian",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Zesty Diesel",
-    "type": ""
+    "type": "",
+    "ranges": []
   },
   {
     "name": "Zkittles",
-    "type": "I"
+    "type": "I",
+    "ranges": []
   },
   {
     "name": "Zurfer",
-    "type": ""
+    "type": "",
+    "ranges": []
   }
 ];
-  const STORAGE_KEY = 'baked_master_strains_v1';
+  const STORAGE_KEY = 'baked_master_strains_v2';
+  const LEGACY_STORAGE_KEY = 'baked_master_strains_v1';
 
   function cleanName(value) {
-    return String(value || '').trim().replace(/\s+/g, ' ');
+    return String(value || '').trim().replace(/\\s+/g, ' ');
   }
 
   function normaliseType(value) {
@@ -518,19 +744,34 @@
     return ['S', 'I', 'H'].includes(t) ? t : '';
   }
 
+  function normaliseRanges(value) {
+    const raw = Array.isArray(value) ? value : String(value || '').split(',');
+    const found = [];
+    raw.forEach(v => {
+      const match = BAKED_RANGES.find(r => r.toLowerCase() === String(v || '').trim().toLowerCase());
+      if (match && !found.includes(match)) found.push(match);
+    });
+    return found;
+  }
+
   function loadCustom() {
     try {
-      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      return Array.isArray(data) ? data : [];
+      let data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (!Array.isArray(data)) {
+        // Automatically carry forward strains saved with the older Master Strains file.
+        data = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]');
+        if (!Array.isArray(data)) data = [];
+        data = data.map(s => ({ name:s.name, type:s.type, ranges:normaliseRanges(s.ranges || s.range) }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }
+      return data;
     } catch (_) {
       return [];
     }
   }
 
   function saveCustom(list) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (_) {}
   }
 
   function mergeLists() {
@@ -540,67 +781,92 @@
       if (!name) return;
       const key = name.toLowerCase();
       const type = normaliseType(item && item.type);
-      if (!map.has(key)) map.set(key, { name, type });
-      else if (!map.get(key).type && type) map.get(key).type = type;
+      const ranges = normaliseRanges(item && (item.ranges || item.range));
+      if (!map.has(key)) {
+        map.set(key, { name, type, ranges:[...ranges] });
+      } else {
+        const current = map.get(key);
+        if (!current.type && type) current.type = type;
+        ranges.forEach(r => { if (!current.ranges.includes(r)) current.ranges.push(r); });
+      }
     });
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...map.values()].sort((a,b) => a.name.localeCompare(b.name));
   }
 
-  function getAll() {
-    return mergeLists();
-  }
+  function getAll() { return mergeLists(); }
 
   function find(query) {
     const q = cleanName(query).toLowerCase();
     if (!q) return getAll();
     return getAll().filter(s =>
       s.name.toLowerCase().includes(q) ||
-      s.type.toLowerCase() === q
+      s.type.toLowerCase() === q ||
+      s.ranges.some(r => r.toLowerCase().includes(q))
     );
   }
 
-  function add(name, type) {
-    name = cleanName(name);
-    type = normaliseType(type);
-    if (!name) return null;
-
-    const all = getAll();
-    const existing = all.find(s => s.name.toLowerCase() === name.toLowerCase());
-    if (existing) {
-      if (!existing.type && type) {
-        const custom = loadCustom();
-        const idx = custom.findIndex(s => cleanName(s.name).toLowerCase() === name.toLowerCase());
-        if (idx >= 0) custom[idx].type = type;
-        else custom.push({ name, type });
-        saveCustom(custom);
-      }
-      return existing;
-    }
-
+  function upsertCustom(name, type, ranges) {
     const custom = loadCustom();
-    custom.push({ name, type });
+    const key = cleanName(name).toLowerCase();
+    const idx = custom.findIndex(s => cleanName(s.name).toLowerCase() === key);
+    const entry = { name: cleanName(name), type: normaliseType(type), ranges: normaliseRanges(ranges) };
+    if (idx >= 0) {
+      const old = custom[idx] || {};
+      entry.type = entry.type || normaliseType(old.type);
+      entry.ranges = [...new Set([...normaliseRanges(old.ranges || old.range), ...entry.ranges])];
+      custom[idx] = entry;
+    } else custom.push(entry);
     saveCustom(custom);
     window.dispatchEvent(new CustomEvent('baked:master-strains-updated'));
-    return { name, type };
+    return entry;
+  }
+
+  // Backwards compatible: add(name, type) still works. New usage: add(name, type, rangeOrRanges).
+  function add(name, type, rangeOrRanges) {
+    name = cleanName(name);
+    if (!name) return null;
+    return upsertCustom(name, type, rangeOrRanges);
+  }
+
+  function setRanges(name, rangeOrRanges) {
+    const current = getAll().find(s => s.name.toLowerCase() === cleanName(name).toLowerCase());
+    if (!current) return null;
+    const custom = loadCustom();
+    const key = current.name.toLowerCase();
+    const idx = custom.findIndex(s => cleanName(s.name).toLowerCase() === key);
+    const entry = { name:current.name, type:current.type, ranges:normaliseRanges(rangeOrRanges) };
+    if (idx >= 0) custom[idx] = entry; else custom.push(entry);
+    saveCustom(custom);
+    window.dispatchEvent(new CustomEvent('baked:master-strains-updated'));
+    return entry;
   }
 
   function removeCustom(name) {
     const key = cleanName(name).toLowerCase();
-    const custom = loadCustom().filter(s => cleanName(s.name).toLowerCase() !== key);
-    saveCustom(custom);
+    saveCustom(loadCustom().filter(s => cleanName(s.name).toLowerCase() !== key));
     window.dispatchEvent(new CustomEvent('baked:master-strains-updated'));
   }
 
   function label(strain) {
-    return strain.type ? `${strain.name} (${strain.type})` : strain.name;
+    const type = strain.type ? ` (${strain.type})` : '';
+    const range = strain.ranges && strain.ranges.length ? ` — ${strain.ranges.join(', ')}` : ' — Range not set';
+    return `${strain.name}${type}${range}`;
   }
 
-  function optionsHtml(selectedValue) {
+  function optionsHtml(selectedValue, rangeFilter='') {
     const selected = cleanName(selectedValue).toLowerCase();
-    return getAll().map(s => {
+    const rf = String(rangeFilter || '').trim().toLowerCase();
+    return getAll().filter(s => !rf || s.ranges.some(r => r.toLowerCase() === rf)).map(s => {
       const isSelected = s.name.toLowerCase() === selected ? ' selected' : '';
       return `<option value="${escapeHtml(s.name)}"${isSelected}>${escapeHtml(label(s))}</option>`;
     }).join('');
+  }
+
+  function rangeOptionsHtml(selectedValue='') {
+    const selected = String(selectedValue || '').trim().toLowerCase();
+    return ['<option value="">Select range</option>', ...BAKED_RANGES.map(r =>
+      `<option value="${r}"${r.toLowerCase()===selected?' selected':''}>${r}</option>`
+    )].join('');
   }
 
   function escapeHtml(value) {
@@ -610,23 +876,11 @@
   }
 
   window.BAKED_MASTER_STRAINS = {
-    getAll,
-    find,
-    add,
-    removeCustom,
-    label,
-    optionsHtml,
-    builtIn: BUILT_IN_STRAINS.slice()
+    getAll, find, add, setRanges, removeCustom, label, optionsHtml, rangeOptionsHtml,
+    ranges: BAKED_RANGES.slice(), builtIn: BUILT_IN_STRAINS.slice()
   };
 
-  // Make the catalogue available to existing code that looks for masterStrains.
-  if (!window.masterStrains) {
-    window.masterStrains = getAll();
-  }
-
-  window.addEventListener('baked:master-strains-updated', () => {
-    window.masterStrains = getAll();
-  });
-
-  console.info(`[Baked] Master Strains loaded: ${getAll().length} strains`);
+  window.masterStrains = getAll();
+  window.addEventListener('baked:master-strains-updated', () => { window.masterStrains = getAll(); });
+  console.info(`[Baked] Master Strains loaded: ${getAll().length} strains with range support`);
 })();
