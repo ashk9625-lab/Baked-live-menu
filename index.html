@@ -25,16 +25,9 @@
   <span>Persons under 18 may not enter, browse, place orders, or collect products through this live menu.</span>
 </div>
 
-      <p>Enter your 13-digit South African ID number. The site checks the ID format and birth date to confirm that you are 18 or older.</p>
-      <form id="ageVerificationForm" class="form-stack age-form" novalidate>
-        <label>South African ID number
-          <input id="customerIdNumber" type="text" inputmode="numeric" autocomplete="off" maxlength="13" placeholder="YYMMDDSSSSCAZ" aria-describedby="ageCheckMessage" required>
-        </label>
-        <button id="verifyAgeButton" class="btn primary wide" type="submit">Verify and enter</button>
-      </form>
-      <p id="ageCheckMessage" class="form-message age-message" role="alert"></p>
-      <p class="privacy-note">Your ID number is checked only in this browser and is not saved or sent with your order.</p>
-      <button id="leaveSite" class="btn ghost wide">Leave</button>
+      <p>Please confirm that you are 18 years or older to enter the Baked Africa live menu.</p>
+      <button id="confirmAgeButton" class="btn primary wide" type="button">I am 18 or older — Enter</button>
+      <button id="leaveSite" class="btn ghost wide" type="button">I am under 18 — Leave</button>
     </div>
   </div>
 
@@ -160,6 +153,20 @@
           <div id="adminProducts" class="admin-list"></div>
         </section>
 
+        <section id="strainsTab" class="admin-tab-panel hidden">
+          <div class="admin-toolbar">
+            <div><h3>Master Strains</h3><p class="admin-help">Save every strain once, then reuse it when adding products or stock.</p></div>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(180px,1fr) 150px auto;gap:8px;align-items:end;margin-bottom:12px">
+            <label style="margin:0">Strain name<input id="masterStrainName" placeholder="e.g. Blue Cheese"></label>
+            <label style="margin:0">Type<select id="masterStrainType"><option value="">Not set</option><option value="S">Sativa (S)</option><option value="I">Indica (I)</option><option value="H">Hybrid (H)</option></select></label>
+            <button id="addMasterStrainButton" class="btn primary" type="button">+ SAVE STRAIN</button>
+          </div>
+          <div class="fast-stock-search"><input id="masterStrainSearch" type="search" placeholder="Search saved strains…"></div>
+          <p id="masterStrainMessage" class="form-message"></p>
+          <div id="masterStrainList" class="admin-list"></div>
+        </section>
+
         <section id="ordersTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Customer Orders</h3><button id="refreshOrdersButton" class="btn ghost">Refresh</button></div>
           <div class="order-cleanup-toolbar">
@@ -282,10 +289,10 @@
         <section id="settingsTab" class="admin-tab-panel hidden">
           <div class="admin-toolbar"><h3>Store Settings</h3><span id="settingsStatus" class="status-inline"></span></div>
           <form id="settingsForm" class="settings-grid">
-            <label class="switch-row"><span><strong>Store open</strong><small>Turn ordering on or off immediately.</small></span><input id="settingStoreOpen" type="checkbox"></label>
-            <label class="switch-row"><span><strong>Use business hours</strong><small>Automatically allow orders only between these times.</small></span><input id="settingAutoHours" type="checkbox"></label>
-            <label>Opening time<input id="settingOpeningTime" type="time"></label>
-            <label>Closing time<input id="settingClosingTime" type="time"></label>
+            <label class="switch-row"><span><strong>Store open 24 hours</strong><small>Customer ordering is available all day, every day.</small></span><input id="settingStoreOpen" type="checkbox" checked disabled></label>
+            <label class="switch-row"><span><strong>Business hours</strong><small>Disabled — the live menu is open 24/7.</small></span><input id="settingAutoHours" type="checkbox" disabled></label>
+            <label>Opening time<input id="settingOpeningTime" type="time" value="00:00" disabled></label>
+            <label>Closing time<input id="settingClosingTime" type="time" value="23:59" disabled></label>
             <label class="full">Customer banner<input id="settingBannerText" maxlength="160" placeholder="New products available today"></label>
             <button class="btn primary wide full" type="submit">Save store settings</button>
           </form>
@@ -331,10 +338,14 @@
         <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
         <label class="full">Description<textarea id="productDescription" rows="3" placeholder="Optional normal product description"></textarea></label>
         <div class="full" id="productStrainManager" style="display:grid;gap:10px">
-          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Type the strain name and quantity directly below.</small></div>
+          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Choose from Master Strains. You only type a strain once in the Master Strains section.</small></div>
+          <div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end">
+            <label style="margin:0">Saved strain<select id="productSavedStrain"><option value="">Select strain…</option></select></label>
+            <label style="margin:0">Quantity<input id="productSavedStrainQty" type="number" min="0" step="1" inputmode="numeric" value="0"></label>
+            <button type="button" class="btn primary compact" id="addSavedStrainToProduct">+ ADD</button>
+          </div>
           <datalist id="strainLibraryList"></datalist>
           <div id="productStrainRows" style="display:grid;gap:8px"></div>
-          <button id="addProductStrainRow" type="button" class="btn ghost" style="justify-self:start">+ Add another strain</button>
           <textarea id="productStrains" class="hidden" aria-hidden="true" tabindex="-1"></textarea>
         </div>
         <label class="check full"><input id="productActive" type="checkbox" checked> Visible on live menu</label>

@@ -147,6 +147,79 @@ function refreshStrainLibraryDatalist(){
   const list=$('#strainLibraryList');if(!list)return;
   list.innerHTML=getSavedStrainLibrary().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
 }
+function parseStrainType(name=''){
+  const m=String(name||'').trim().match(/\(([SIH])\)\s*$/i);
+  return m?m[1].toUpperCase():'';
+}
+function stripStrainType(name=''){
+  return String(name||'').trim().replace(/\s*\(([SIH])\)\s*$/i,'').trim();
+}
+function getMasterStrains(){
+  const map=new Map();
+  const add=(name,type='')=>{
+    const base=stripStrainType(name).replace(/\s+/g,' ').trim();
+    const t=(type||parseStrainType(name)||'').toUpperCase();
+    if(!base)return;
+    const key=base.toLowerCase();
+    const current=map.get(key);
+    if(!current||(!current.type&&t))map.set(key,{name:base,type:['S','I','H'].includes(t)?t:''});
+  };
+  try{(JSON.parse(localStorage.getItem('baked-master-strains')||'[]')||[]).forEach(x=>typeof x==='string'?add(x):add(x.name,x.type));}catch{}
+  getSavedStrainLibrary().forEach(n=>add(n));
+  (products||[]).forEach(p=>parseStrainList(p.description).forEach(st=>add(st.name)));
+  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}));
+}
+function saveMasterStrains(list){
+  localStorage.setItem('baked-master-strains',JSON.stringify(list));
+  const names=list.map(x=>`${x.name}${x.type?` (${x.type})`:''}`);
+  localStorage.setItem('baked-strain-library',JSON.stringify(names));
+  refreshStrainLibraryDatalist();
+  refreshProductSavedStrainSelect();
+}
+function displayMasterStrain(st){return `${st.name}${st.type?` (${st.type})`:''}`;}
+function refreshProductSavedStrainSelect(){
+  const sel=$('#productSavedStrain');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">Select strain…</option>'+getMasterStrains().map(st=>`<option value="${escapeHtml(displayMasterStrain(st))}">${escapeHtml(displayMasterStrain(st))}</option>`).join('');
+  if([...sel.options].some(o=>o.value===current))sel.value=current;
+}
+function renderMasterStrains(){
+  const box=$('#masterStrainList');if(!box)return;
+  const q=String($('#masterStrainSearch')?.value||'').trim().toLowerCase();
+  const all=getMasterStrains();
+  const rows=all.filter(st=>!q||displayMasterStrain(st).toLowerCase().includes(q));
+  box.innerHTML=rows.length?rows.map(st=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${escapeHtml(st.type||'•')}</span><div><strong>${escapeHtml(st.name)}</strong><small>${st.type?escapeHtml(st.type==='S'?'Sativa':st.type==='I'?'Indica':'Hybrid'):'Type not set'}</small></div></div><div class="admin-row-data"><button class="btn danger compact delete-master-strain" data-name="${escapeHtml(st.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><p>No saved strains found.</p></div>';
+  $$('.delete-master-strain').forEach(b=>b.onclick=()=>{
+    const name=b.dataset.name;
+    saveMasterStrains(getMasterStrains().filter(st=>st.name.toLowerCase()!==String(name).toLowerCase()));
+    renderMasterStrains();
+    const msg=$('#masterStrainMessage');if(msg)msg.textContent=`${name} removed from Master Strains.`;
+  });
+}
+function addMasterStrain(){
+  const input=$('#masterStrainName'),type=$('#masterStrainType'),msg=$('#masterStrainMessage');
+  const name=stripStrainType(input?.value||'').replace(/\s+/g,' ').trim();
+  const t=String(type?.value||'').toUpperCase();
+  if(!name){if(msg)msg.textContent='Enter a strain name.';return;}
+  const list=getMasterStrains();
+  const i=list.findIndex(st=>st.name.toLowerCase()===name.toLowerCase());
+  const item={name,type:['S','I','H'].includes(t)?t:''};
+  if(i>=0)list[i]={...list[i],...item};else list.push(item);
+  saveMasterStrains(list.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})));
+  if(input)input.value='';if(type)type.value='';if(msg)msg.textContent=`${displayMasterStrain(item)} saved.`;
+  renderMasterStrains();
+}
+function addSelectedMasterStrainToProduct(){
+  const sel=$('#productSavedStrain');
+  const qty=Number($('#productSavedStrainQty')?.value||0);
+  const name=String(sel?.value||'').trim();
+  if(!name)return toast('Select a saved strain');
+  if(!Number.isInteger(qty)||qty<0)return toast('Enter a valid quantity');
+  const existing=$$('#productStrainRows .product-strain-entry').find(r=>(r.querySelector('.product-strain-name')?.value||'').trim().toLowerCase()===name.toLowerCase());
+  if(existing){existing.querySelector('.product-strain-qty').value=qty;syncProductStrainText();toast('Strain quantity updated');}
+  else addProductStrainRow({name,qty});
+  if(sel)sel.value='';if($('#productSavedStrainQty'))$('#productSavedStrainQty').value='0';
+}
 function syncProductStrainText(){
   const rows=[...document.querySelectorAll('#productStrainRows .product-strain-entry')];
   const strains=rows.map(row=>({
@@ -161,7 +234,7 @@ function addProductStrainRow(strain={name:'',qty:0}){
   const row=document.createElement('div');
   row.className='product-strain-entry';
   row.style.cssText='display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end';
-  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" list="strainLibraryList" value="${escapeHtml(strain.name||'')}" placeholder="Type strain name"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
+  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" readonly value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
   box.appendChild(row);
   row.querySelectorAll('input').forEach(input=>input.addEventListener('input',syncProductStrainText));
   row.querySelector('.remove-product-strain').onclick=()=>{row.remove();syncProductStrainText();};
@@ -623,6 +696,7 @@ function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
   if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
   renderProductStrainManager(p?parseStrainList(p.description):[]);
+  refreshProductSavedStrainSelect();
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
@@ -956,10 +1030,8 @@ async function loadInventory(){
 
 function timeToMinutes(value='00:00'){const [h,m]=String(value).slice(0,5).split(':').map(Number);return (h||0)*60+(m||0)}
 function orderingAllowed(){
-  if(!siteSettings.store_open)return false;
-  if(!siteSettings.auto_hours)return true;
-  const now=new Date(), current=now.getHours()*60+now.getMinutes(), open=timeToMinutes(siteSettings.opening_time), close=timeToMinutes(siteSettings.closing_time);
-  return open<=close ? current>=open&&current<close : current>=open||current<close;
+  // Live menu is permanently open 24 hours a day.
+  return true;
 }
 async function loadSiteSettings(forAdmin=false){
   try{const rows=await api('/rest/v1/site_settings?select=*&id=eq.1');if(rows?.[0])siteSettings=rows[0];}catch(e){console.warn('Settings unavailable',e)}
@@ -1164,74 +1236,16 @@ async function deleteSuggestion(id){
 
 function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); if(tab==='suggestions')loadAdminSuggestions(); }
 
-function luhnValidSouthAfricanId(idNumber){
-  if(!/^\d{13}$/.test(idNumber)) return false;
-  let oddSum=0;
-  for(let i=0;i<12;i+=2) oddSum+=Number(idNumber[i]);
-  const evenNumber=Number(idNumber.slice(1,12).split('').filter((_,i)=>i%2===0).join(''))*2;
-  const evenSum=String(evenNumber).split('').reduce((sum,d)=>sum+Number(d),0);
-  const check=(10-((oddSum+evenSum)%10))%10;
-  return check===Number(idNumber[12]);
-}
-function birthDateFromSouthAfricanId(idNumber){
-  const yy=Number(idNumber.slice(0,2));
-  const mm=Number(idNumber.slice(2,4));
-  const dd=Number(idNumber.slice(4,6));
-  const today=new Date();
-  const currentYY=today.getFullYear()%100;
-  const year=yy<=currentYY?2000+yy:1900+yy;
-  const birthDate=new Date(year,mm-1,dd);
-  if(birthDate.getFullYear()!==year||birthDate.getMonth()!==mm-1||birthDate.getDate()!==dd||birthDate>today) return null;
-  return birthDate;
-}
-function ageOnDate(birthDate,today=new Date()){
-  let age=today.getFullYear()-birthDate.getFullYear();
-  const beforeBirthday=today.getMonth()<birthDate.getMonth()||(today.getMonth()===birthDate.getMonth()&&today.getDate()<birthDate.getDate());
-  if(beforeBirthday) age--;
-  return age;
-}
-function verifyCustomerAge(event){
-  event.preventDefault();
-  const input=$('#customerIdNumber');
-  const message=$('#ageCheckMessage');
-  const idNumber=input.value.replace(/\s+/g,'');
-  input.value=idNumber;
-  message.textContent='';
-  if(!/^\d{13}$/.test(idNumber)){
-    message.textContent='Please enter a valid 13-digit South African ID number.';
-    input.focus();
-    return;
-  }
-  const birthDate=birthDateFromSouthAfricanId(idNumber);
-  if(!birthDate||!luhnValidSouthAfricanId(idNumber)){
-    message.textContent='This ID number is not valid. Please check it and try again.';
-    input.focus();
-    return;
-  }
-  if(ageOnDate(birthDate)<18){
-    message.textContent='Access denied. You must be 18 or older to enter this site.';
-    input.value='';
-    input.focus();
-    return;
-  }
-  localStorage.setItem('baked-age-verified-until', String(Date.now() + 30*24*60*60*1000));
-  input.value='';
-  $('#ageGate').classList.add('hidden');
-}
 $('#productImageFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;$('#productFormMessage').textContent='Preparing photo…';try{$('#productImage').value=await compressImage(file);$('#productFormMessage').textContent='Photo ready'}catch{$('#productFormMessage').textContent='Could not process photo'}});
 $('#settingsForm').addEventListener('submit',saveSiteSettings);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
 $('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
-$('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
-$('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,13)});
+$('#confirmAgeButton').onclick=()=>{ localStorage.setItem('baked-age-verified-until', String(Date.now() + 30*24*60*60*1000)); $('#ageGate').classList.add('hidden'); };
 $('#leaveSite').onclick=()=>location.href='https://www.google.com';
 {
   const verifiedUntil=Number(localStorage.getItem('baked-age-verified-until')||0);
-  if(verifiedUntil>Date.now()){
-    $('#ageGate').classList.add('hidden');
-  }else{
-    localStorage.removeItem('baked-age-verified-until');
-  }
+  if(verifiedUntil>Date.now()) $('#ageGate').classList.add('hidden');
+  else localStorage.removeItem('baked-age-verified-until');
 }
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; 
@@ -1270,6 +1284,7 @@ function runSurpriseMe(){
 }
 
 $('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
+$('#masterStrainSearch')&&($('#masterStrainSearch').oninput=renderMasterStrains); $('#addMasterStrainButton')&&($('#addMasterStrainButton').onclick=addMasterStrain); $('#addSavedStrainToProduct')&&($('#addSavedStrainToProduct').onclick=addSelectedMasterStrainToProduct);
 $('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 if($('#refreshSalesButton'))$('#refreshSalesButton').onclick=loadSales;
@@ -1294,7 +1309,7 @@ if($('#surpriseButton')) $('#surpriseButton').onclick=openSurpriseMe;
 if($('#surpriseClose')) $('#surpriseClose').onclick=closeSurpriseMe;
 if($('#surpriseGo')) $('#surpriseGo').onclick=runSurpriseMe;
 if($('#surpriseModal')) $('#surpriseModal').onclick=e=>{if(e.target===$('#surpriseModal'))closeSurpriseMe();};
-loadSiteSettings().then(loadProducts);
+loadSiteSettings().then(loadProducts).then(()=>{renderMasterStrains();refreshProductSavedStrainSelect();});
 // Robust strain popup closing
 document.addEventListener('click',e=>{
   if(e.target.closest('#strainModal [data-close]')){e.preventDefault();e.stopPropagation();closeStrainModal();return;}
