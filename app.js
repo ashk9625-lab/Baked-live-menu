@@ -13,7 +13,7 @@ const FALLBACK_PRODUCTS = [
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
 let activeVaultFilter='all';
-let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
+let siteSettings={store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59',banner_text:''};
 let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const money = (v) => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:0}).format(Number(v||0));
@@ -1036,7 +1036,8 @@ function orderingAllowed(){
 async function loadSiteSettings(forAdmin=false){
   try{const rows=await api('/rest/v1/site_settings?select=*&id=eq.1');if(rows?.[0])siteSettings=rows[0];}catch(e){console.warn('Settings unavailable',e)}
   applySiteSettings();
-  if(forAdmin){$('#settingStoreOpen').checked=!!siteSettings.store_open;$('#settingAutoHours').checked=!!siteSettings.auto_hours;$('#settingOpeningTime').value=String(siteSettings.opening_time||'09:00').slice(0,5);$('#settingClosingTime').value=String(siteSettings.closing_time||'18:00').slice(0,5);$('#settingBannerText').value=siteSettings.banner_text||'';}
+  siteSettings={...siteSettings,store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59'};
+  if(forAdmin){$('#settingStoreOpen').checked=true;$('#settingAutoHours').checked=false;$('#settingOpeningTime').value='00:00';$('#settingClosingTime').value='23:59';$('#settingBannerText').value=siteSettings.banner_text||'';}
 }
 function applySiteSettings(){
   const banner=$('#storeBanner'), closed=$('#storeClosedNotice');
@@ -1045,7 +1046,7 @@ function applySiteSettings(){
   const place=$('#placeOrderButton');if(place){place.disabled=!orderingAllowed();place.textContent=orderingAllowed()?'Place order':'Store closed';}
 }
 async function saveSiteSettings(e){
-  e.preventDefault(); const payload={store_open:$('#settingStoreOpen').checked,auto_hours:$('#settingAutoHours').checked,opening_time:$('#settingOpeningTime').value||'09:00',closing_time:$('#settingClosingTime').value||'18:00',banner_text:$('#settingBannerText').value.trim(),updated_at:new Date().toISOString()};
+  e.preventDefault(); const payload={store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59',banner_text:$('#settingBannerText').value.trim(),updated_at:new Date().toISOString()};
   $('#settingsStatus').textContent='Saving…';
   try{await api('/rest/v1/site_settings?id=eq.1',{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});siteSettings={...siteSettings,...payload};applySiteSettings();renderProducts();renderFeaturedProducts();$('#settingsStatus').textContent='Saved';toast('Store settings saved')}catch(err){$('#settingsStatus').textContent=err.message}
 }
