@@ -1236,7 +1236,7 @@ async function deleteSuggestion(id){
   }catch(err){toast(err.message);}
 }
 
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); if(tab==='suggestions')loadAdminSuggestions(); }
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='strains'){renderMasterStrains();refreshProductSavedStrainSelect();} if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); if(tab==='suggestions')loadAdminSuggestions(); }
 
 function luhnValidSouthAfricanId(idNumber){
   if(!/^\d{13}$/.test(idNumber)) return false;
