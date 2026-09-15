@@ -195,10 +195,10 @@
 <div class="csv-stock-card">
             <div class="admin-toolbar">
               <div>
-                <h3>Master Strain CSV</h3>
-                <p class="admin-help">Keep every old and new strain in one CSV. Use: Product - Strain, Type, Stock Qty. A quantity of 0 keeps the strain saved but out of stock.</p>
+                <h3>CSV Products & Stock</h3>
+                <p class="admin-help">Use one CSV to update existing stock or add completely new products.</p>
               </div>
-              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Master CSV</button>
+              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Product Template</button>
             </div>
             <div class="csv-stock-controls">
               <input id="stockCsvFile" type="file" accept=".csv,text/csv">
@@ -421,24 +421,6 @@
 </div>
 <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span><span>STRICTLY 18+ ONLY. No persons under 18 may use this live menu.</span>
 </footer>
-  <script>
-  // Age gate fallback: keeps Enter working even if another menu script has an error.
-  (function(){
-    const gate=document.getElementById('ageGate');
-    const enter=document.getElementById('confirmAgeButton');
-    const leave=document.getElementById('leaveSite');
-    if(!gate||!enter) return;
-    const key='baked-age-verified-until';
-    const verifiedUntil=Number(localStorage.getItem(key)||0);
-    if(verifiedUntil>Date.now()) gate.classList.add('hidden');
-    enter.addEventListener('click',function(){
-      localStorage.setItem(key,String(Date.now()+30*24*60*60*1000));
-      gate.classList.add('hidden');
-      gate.style.display='none';
-    });
-    if(leave) leave.addEventListener('click',function(){ location.href='https://www.google.com'; });
-  })();
-  </script>
   <script src="app.js"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));}</script>
 
