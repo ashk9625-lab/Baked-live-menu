@@ -178,8 +178,10 @@ function saveMasterStrains(list){
 }
 function displayMasterStrain(st){return `${st.name}${st.type?` (${st.type})`:''}`;}
 function refreshProductSavedStrainSelect(){
-  const input=$('#productSavedStrain');if(!input)return;
-  refreshStrainLibraryDatalist();
+  const sel=$('#productSavedStrain');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">Select strain…</option>'+getMasterStrains().map(st=>`<option value="${escapeHtml(displayMasterStrain(st))}">${escapeHtml(displayMasterStrain(st))}</option>`).join('');
+  if([...sel.options].some(o=>o.value===current))sel.value=current;
 }
 function renderMasterStrains(){
   const box=$('#masterStrainList');if(!box)return;
@@ -211,22 +213,11 @@ function addSelectedMasterStrainToProduct(){
   const sel=$('#productSavedStrain');
   const qty=Number($('#productSavedStrainQty')?.value||0);
   const name=String(sel?.value||'').trim();
-  if(!name)return toast('Select or type a strain');
+  if(!name)return toast('Select a saved strain');
   if(!Number.isInteger(qty)||qty<0)return toast('Enter a valid quantity');
   const existing=$$('#productStrainRows .product-strain-entry').find(r=>(r.querySelector('.product-strain-name')?.value||'').trim().toLowerCase()===name.toLowerCase());
   if(existing){existing.querySelector('.product-strain-qty').value=qty;syncProductStrainText();toast('Strain quantity updated');}
   else addProductStrainRow({name,qty});
-  // Remember newly typed strains so they appear in the saved list next time.
-  const cleanBase=stripStrainType(name).replace(/\s+/g,' ').trim();
-  if(cleanBase){
-    const type=parseStrainType(name);
-    const list=getMasterStrains();
-    if(!list.some(st=>st.name.toLowerCase()===cleanBase.toLowerCase())){
-      list.push({name:cleanBase,type});
-      saveMasterStrains(list.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})));
-      renderMasterStrains();
-    }
-  }
   if(sel)sel.value='';if($('#productSavedStrainQty'))$('#productSavedStrainQty').value='0';
 }
 function syncProductStrainText(){
@@ -243,7 +234,7 @@ function addProductStrainRow(strain={name:'',qty:0}){
   const row=document.createElement('div');
   row.className='product-strain-entry';
   row.style.cssText='display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end';
-  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" list="strainLibraryList" value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
+  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" readonly value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
   box.appendChild(row);
   row.querySelectorAll('input').forEach(input=>input.addEventListener('input',syncProductStrainText));
   row.querySelector('.remove-product-strain').onclick=()=>{row.remove();syncProductStrainText();};
@@ -926,8 +917,6 @@ async function removeAdmin(id,email){
 
 
 
-async 
-
 let fastStockProducts=[];
 function renderFastStock(){
   const box=$('#fastStockList');if(!box)return;
@@ -1252,12 +1241,7 @@ $('#productImageFile').addEventListener('change',async e=>{const file=e.target.f
 $('#settingsForm').addEventListener('submit',saveSiteSettings);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
 $('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
-$('#confirmAgeButton').onclick=()=>{ localStorage.setItem('baked-age-verified-until', String(Date.now() + 30*24*60*60*1000)); $('#ageGate').classList.add('hidden'); };
-$('#leaveSite').onclick=()=>location.href='https://www.google.com';
 {
-  const verifiedUntil=Number(localStorage.getItem('baked-age-verified-until')||0);
-  if(verifiedUntil>Date.now()) $('#ageGate').classList.add('hidden');
-  else localStorage.removeItem('baked-age-verified-until');
 }
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; 

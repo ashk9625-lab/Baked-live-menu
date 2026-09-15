@@ -15,21 +15,7 @@
   <link rel="icon" type="image/png" href="baked-logo.png">
 </head>
 <body>
-  <div id="ageGate" class="age-gate">
-    <div class="age-card">
-      <div class="brand-mark">B</div>
-      <p class="eyebrow">BAKED AFRICA</p>
-      <h1>Age verification</h1>
-<div class="under18-policy">
-  <strong>NO UNDER 18s — STRICTLY 18+ ONLY</strong>
-  <span>Persons under 18 may not enter, browse, place orders, or collect products through this live menu.</span>
-</div>
-
-      <p>Please confirm that you are 18 years or older to enter the Baked Africa live menu.</p>
-      <button id="confirmAgeButton" class="btn primary wide" type="button">I am 18 or older — Enter</button>
-      <button id="leaveSite" class="btn ghost wide" type="button">I am under 18 — Leave</button>
-    </div>
-  </div>
+  
 
   <header class="topbar"><button id="homeButton" class="brand-button" aria-label="Return to menu">
       <img src="baked-logo.png" class="baked-header-logo" alt="BAKED">
@@ -177,9 +163,7 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
-          
-<div class="inventory-divider"></div>
-<div class="fast-stock-card">
+          <div class="fast-stock-card">
   <div class="admin-toolbar">
     <div><h3>Fast Stock</h3><p class="admin-help">Update all strain quantities without opening each product.</p></div>
     <button id="refreshFastStockButton" class="btn ghost" type="button">Refresh</button>
@@ -340,9 +324,9 @@
         <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
         <label class="full">Description<textarea id="productDescription" rows="3" placeholder="Optional normal product description"></textarea></label>
         <div class="full" id="productStrainManager" style="display:grid;gap:10px">
-          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Select a saved strain or type a new strain name. New strains are saved for future use.</small></div>
+          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Choose from Master Strains. You only type a strain once in the Master Strains section.</small></div>
           <div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end">
-            <label style="margin:0">Strain<input id="productSavedStrain" list="strainLibraryList" placeholder="Select saved or type new strain…" autocomplete="off"></label>
+            <label style="margin:0">Saved strain<select id="productSavedStrain"><option value="">Select strain…</option></select></label>
             <label style="margin:0">Quantity<input id="productSavedStrainQty" type="number" min="0" step="1" inputmode="numeric" value="0"></label>
             <button type="button" class="btn primary compact" id="addSavedStrainToProduct">+ ADD</button>
           </div>
