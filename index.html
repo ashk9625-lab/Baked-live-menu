@@ -338,9 +338,9 @@
         <label class="full">Take or choose photo<input id="productImageFile" type="file" accept="image/*" capture="environment"><small class="field-help">The photo will be compressed and saved with the product.</small></label>
         <label class="full">Description<textarea id="productDescription" rows="3" placeholder="Optional normal product description"></textarea></label>
         <div class="full" id="productStrainManager" style="display:grid;gap:10px">
-          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Choose from Master Strains. You only type a strain once in the Master Strains section.</small></div>
+          <div><strong>Strains & quantities</strong><small class="field-help" style="display:block">Select a saved strain or type a new strain name. New strains are saved for future use.</small></div>
           <div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end">
-            <label style="margin:0">Saved strain<select id="productSavedStrain"><option value="">Select strain…</option></select></label>
+            <label style="margin:0">Strain<input id="productSavedStrain" list="strainLibraryList" placeholder="Select saved or type new strain…" autocomplete="off"></label>
             <label style="margin:0">Quantity<input id="productSavedStrainQty" type="number" min="0" step="1" inputmode="numeric" value="0"></label>
             <button type="button" class="btn primary compact" id="addSavedStrainToProduct">+ ADD</button>
           </div>
