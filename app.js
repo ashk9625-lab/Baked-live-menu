@@ -966,62 +966,94 @@ async function saveFastStock(){
 }
 
 let stockCsvChanges = [];
-let stockCsvNewProducts = [];
 
 function csvEscape(v){
   v=String(v??'');
-  return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
+  return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;
+}
+function csvParse(text){
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){ if(q && text[i+1]==='"'){cell+='"';i++;} else q=!q; }
+    else if(c===','&&!q){row.push(cell.trim());cell='';}
+    else if((c==='\n'||c==='\r')&&!q){
+      if(c==='\r'&&text[i+1]==='\n')i++;
+      row.push(cell.trim()); if(row.some(Boolean))rows.push(row); row=[];cell='';
+    } else cell+=c;
+  }
+  row.push(cell.trim()); if(row.some(Boolean))rows.push(row); return rows;
+}
+function csvStrainType(name){
+  const m=String(name||'').match(/\(([SIH])\)\s*$/i);
+  return m?m[1].toUpperCase():'';
+}
+function csvStrainBase(name){
+  return String(name||'').replace(/\s*\(([SIH])\)\s*$/i,'').trim();
 }
 async function downloadStockCsvTemplate(){
   try{
-    const rows=await api('/rest/v1/products?select=sku,name,category,group_name,strength,price,stock,reorder_level,description,active,featured&order=group_name.asc,name.asc',{auth:true});
-    const data=[['SKU','Product Name','Category','Range','Strength','Price','New Stock Quantity','Reorder Level','Description','Active','Featured'],
-      ...rows.map(p=>[p.sku||'',p.name||'',p.category||'',p.group_name||'',p.strength||'',Number(p.price||0),Number(p.stock||0),Number(p.reorder_level||0),p.description||'',p.active!==false,p.featured===true])];
-    const csv=data.map(r=>r.map(csvEscape).join(',')).join('\r\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='BAKED-PRODUCT-STOCK-UPLOAD.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    const ps=await api('/rest/v1/products?select=id,name,description&order=name.asc',{auth:true});
+    const rows=[['Product - Strain','Type','Stock Qty']];
+    ps.forEach(p=>parseStrainList(p.description).forEach(s=>{
+      rows.push([`${p.name} - ${csvStrainBase(s.name)}`,csvStrainType(s.name),Number(s.qty||0)]);
+    }));
+    const blob=new Blob([rows.map(r=>r.map(csvEscape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='BAKED-MASTER-STRAIN-STOCK.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   }catch(err){toast(err.message);}
 }
-function parseCsv(text){
-  const rows=[];let row=[],cell='',quoted=false;
-  for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(ch===','&&!quoted){row.push(cell.trim());cell='';}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);row=[];cell='';}else cell+=ch;}
-  row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);return rows;
-}
-function csvBool(v,def=false){v=String(v??'').trim().toLowerCase();if(!v)return def;return ['true','yes','1','y'].includes(v);}
 async function previewStockCsv(){
-  const file=$('#stockCsvFile')?.files?.[0];if(!file){toast('Choose a CSV file first');return;}
-  const msg=$('#stockCsvMessage'),box=$('#stockCsvPreview'),btn=$('#applyStockCsvButton');msg.textContent='Checking CSV…';box.innerHTML='';btn.disabled=true;stockCsvChanges=[];stockCsvNewProducts=[];
+  const file=$('#stockCsvFile')?.files?.[0];
+  if(!file){toast('Choose a CSV file first');return;}
+  const msg=$('#stockCsvMessage'), box=$('#stockCsvPreview'), btn=$('#applyStockCsvButton');
+  msg.textContent='Checking CSV…'; box.innerHTML=''; btn.disabled=true; stockCsvChanges=[];
   try{
-    const rows=parseCsv(await file.text());if(rows.length<2)throw new Error('CSV has no product rows.');
-    const h=rows[0].map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,''));
-    const ix=(...names)=>h.findIndex(x=>names.includes(x));
-    const skuI=ix('sku'),nameI=ix('productname','product','name'),catI=ix('category'),rangeI=ix('range','group','groupname'),strengthI=ix('strength'),priceI=ix('price'),stockI=ix('newstockquantity','stock','quantity','qty'),reorderI=ix('reorderlevel','reorder'),descI=ix('description'),activeI=ix('active'),featuredI=ix('featured');
-    if(skuI<0||nameI<0||stockI<0)throw new Error('CSV needs SKU, Product Name and New Stock Quantity columns.');
-    const products=await api('/rest/v1/products?select=*&order=name.asc',{auth:true});
-    const bySku=new Map(products.filter(p=>p.sku).map(p=>[String(p.sku).trim().toLowerCase(),p]));const preview=[];
+    const rows=csvParse(await file.text());
+    if(rows.length<2) throw new Error('CSV has no stock rows.');
+    const heads=rows[0].map(v=>v.toLowerCase().replace(/[^a-z0-9]/g,''));
+    const ni=heads.indexOf('productstrain'), ti=heads.indexOf('type'), qi=heads.indexOf('stockqty');
+    if(ni<0||ti<0||qi<0) throw new Error('Use exactly: Product - Strain, Type, Stock Qty.');
+    const ps=await api('/rest/v1/products?select=id,name,description&order=name.asc',{auth:true});
+    const sorted=[...ps].sort((a,b)=>b.name.length-a.name.length), staged=new Map(), preview=[];
     for(const r of rows.slice(1)){
-      const sku=String(r[skuI]||'').trim(),name=String(r[nameI]||'').trim(),raw=String(r[stockI]||'').trim();if(!sku&&!name&&!raw)continue;
-      const target=Number(raw);if(!sku||!name||!Number.isInteger(target)||target<0){preview.push({sku,name,current:'—',target:raw,status:'Invalid row'});continue;}
-      const p=bySku.get(sku.toLowerCase());
-      if(p){const diff=target-Number(p.stock||0);preview.push({sku,name:p.name,current:Number(p.stock||0),target,status:diff===0?'No change':'Update stock'});if(diff!==0)stockCsvChanges.push({id:p.id,sku,name:p.name,diff});}
-      else{
-        const price=priceI>=0?Number(r[priceI]||0):0;if(!Number.isFinite(price)||price<0){preview.push({sku,name,current:'NEW',target,status:'Invalid price'});continue;}
-        const payload={sku,name,category:catI>=0?String(r[catI]||'').trim():'',group_name:rangeI>=0?String(r[rangeI]||'').trim():'',strength:strengthI>=0?String(r[strengthI]||'').trim():'',price,stock:target,reorder_level:reorderI>=0?Number(r[reorderI]||0):0,description:descI>=0?String(r[descI]||'').trim():'',image_url:null,active:activeI>=0?csvBool(r[activeI],true):true,featured:featuredI>=0?csvBool(r[featuredI],false):false,updated_at:new Date().toISOString()};
-        stockCsvNewProducts.push(payload);preview.push({sku,name,current:'NEW',target,status:'Create product'});
-      }
+      const combined=String(r[ni]||'').trim(), type=String(r[ti]||'').trim().toUpperCase(), qty=Number(r[qi]);
+      if(!combined && !r[ti] && !r[qi]) continue;
+      if(!['S','I','H'].includes(type)||!Number.isInteger(qty)||qty<0){preview.push([combined,type,r[qi],'Invalid']);continue;}
+      const p=sorted.find(x=>combined.toLowerCase().startsWith(x.name.trim().toLowerCase()+' - '));
+      if(!p){preview.push([combined,type,qty,'Product not found']);continue;}
+      const strain=combined.slice(p.name.trim().length+3).trim();
+      if(!strain){preview.push([combined,type,qty,'Missing strain']);continue;}
+      if(!staged.has(String(p.id))) staged.set(String(p.id),{p,strains:parseStrainList(p.description)});
+      const e=staged.get(String(p.id)), i=e.strains.findIndex(s=>csvStrainBase(s.name).toLowerCase()===strain.toLowerCase());
+      if(i>=0){e.strains[i].name=`${strain} (${type})`;e.strains[i].qty=qty;preview.push([`${p.name} - ${strain}`,type,qty,'Replace']);}
+      else {e.strains.push({name:`${strain} (${type})`,qty});preview.push([`${p.name} - ${strain}`,type,qty,'New strain']);}
     }
-    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>SKU</span><span>Product</span><span>Current</span><span>New</span><span>Action</span></div>${preview.map(x=>`<div class="csv-line"><span>${escapeHtml(x.sku)}</span><span>${escapeHtml(x.name)}</span><span>${escapeHtml(x.current)}</span><span>${escapeHtml(x.target)}</span><span>${escapeHtml(x.status)}</span></div>`).join('')}</div>`:'<div class="empty-state"><p>No rows found.</p></div>';
-    const total=stockCsvChanges.length+stockCsvNewProducts.length;msg.textContent=total?`${stockCsvChanges.length} stock update${stockCsvChanges.length===1?'':'s'} and ${stockCsvNewProducts.length} new product${stockCsvNewProducts.length===1?'':'s'} ready.`:'No changes or new products found.';btn.disabled=!total;
-  }catch(err){msg.textContent=err.message;box.innerHTML='';btn.disabled=true;}
+    stockCsvChanges=[...staged.values()];
+    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>Product - Strain</span><span>Type</span><span>Stock Qty</span><span>Action</span></div>${preview.map(r=>`<div class="csv-line"><span>${escapeHtml(r[0])}</span><span>${escapeHtml(r[1])}</span><span>${escapeHtml(r[2])}</span><span>${escapeHtml(r[3])}</span></div>`).join('')}</div>`:'';
+    const bad=preview.filter(r=>r[3]==='Invalid'||r[3]==='Product not found'||r[3]==='Missing strain').length;
+    msg.textContent=bad?`${bad} row(s) need attention. Valid rows are ready.`:`${preview.length} strain row(s) ready.`;
+    btn.disabled=!stockCsvChanges.length;
+  }catch(err){msg.textContent=err.message;box.innerHTML='';}
 }
 async function applyStockCsv(){
-  const total=stockCsvChanges.length+stockCsvNewProducts.length;if(!total)return;const btn=$('#applyStockCsvButton'),msg=$('#stockCsvMessage');btn.disabled=true;msg.textContent=`Processing ${total} item${total===1?'':'s'}…`;let updated=0,created=0;
+  if(!stockCsvChanges.length)return;
+  const btn=$('#applyStockCsvButton'), msg=$('#stockCsvMessage'); btn.disabled=true;
   try{
-    for(const c of stockCsvChanges){await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'CSV Stock Upload'})});updated++;}
-    for(const p of stockCsvNewProducts){await api('/rest/v1/products',{method:'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});created++;}
-    toast(`${updated} updated · ${created} new products added`);msg.textContent=`Done: ${updated} stock updated and ${created} new product${created===1?'':'s'} created.`;stockCsvChanges=[];stockCsvNewProducts=[];$('#stockCsvPreview').innerHTML='';$('#stockCsvFile').value='';await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
-  }catch(err){msg.textContent=`Completed ${updated} updates and ${created} new products before an error: ${err.message}`;toast('CSV import stopped because of an error');}
-  finally{btn.disabled=!(stockCsvChanges.length+stockCsvNewProducts.length);}
+    for(const {p,strains} of stockCsvChanges){
+      const normal=splitProductDescription(p.description).description;
+      const strainText=strains.map(s=>`${s.name} = ${Number(s.qty||0)}`).join('\n');
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{
+        method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},
+        body:JSON.stringify({description:composeProductDescription(normal,strainText),updated_at:new Date().toISOString()})
+      });
+    }
+    msg.textContent='Master strain stock updated. Stock Qty replaced the existing quantities.';
+    toast('CSV stock updated'); stockCsvChanges=[]; box=$('#stockCsvPreview'); if(box)box.innerHTML='';
+    if($('#stockCsvFile'))$('#stockCsvFile').value='';
+    await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){msg.textContent=err.message;toast(err.message);}
+  finally{btn.disabled=!stockCsvChanges.length;}
 }
 
 async function loadInventory(){
