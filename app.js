@@ -972,11 +972,14 @@ function csvEscape(v){
   return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;
 }
 function csvParse(text){
+  text=String(text||'').replace(/^\uFEFF/,'').replace(/^sep=[,;]\s*\r?\n/i,'');
+  const first=(text.split(/\r?\n/)[0]||'');
+  const delim=(first.split(';').length>first.split(',').length)?';':',';
   const rows=[]; let row=[], cell='', q=false;
   for(let i=0;i<text.length;i++){
     const c=text[i];
     if(c==='"'){ if(q && text[i+1]==='"'){cell+='"';i++;} else q=!q; }
-    else if(c===','&&!q){row.push(cell.trim());cell='';}
+    else if(c===delim&&!q){row.push(cell.trim());cell='';}
     else if((c==='\n'||c==='\r')&&!q){
       if(c==='\r'&&text[i+1]==='\n')i++;
       row.push(cell.trim()); if(row.some(Boolean))rows.push(row); row=[];cell='';
@@ -998,9 +1001,13 @@ async function downloadStockCsvTemplate(){
     ps.forEach(p=>parseStrainList(p.description).forEach(s=>{
       rows.push([`${p.name} - ${csvStrainBase(s.name)}`,csvStrainType(s.name),Number(s.qty||0)]);
     }));
-    const blob=new Blob([rows.map(r=>r.map(csvEscape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='BAKED-MASTER-STRAIN-STOCK.csv';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    const body=rows.map(r=>r.map(csvEscape).join(';')).join('\r\n');
+    const blob=new Blob(['\uFEFFsep=;\r\n'+body],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='BAKED-MASTER-STRAIN-STOCK.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   }catch(err){toast(err.message);}
 }
 async function previewStockCsv(){
