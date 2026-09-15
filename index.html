@@ -177,18 +177,7 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
-          <div class="fast-stock-card paste-stock-card">
-  <div class="admin-toolbar">
-    <div><h3>Paste Stock List</h3><p class="admin-help">Paste your normal Baked stock list. The menu will match each strain to the correct product automatically.</p></div>
-  </div>
-  <textarea id="pasteStockText" rows="12" placeholder="King Outdoor\n200x Atomic Jelly(H)\n100x Killer Tiger(S)\n\nKing Yellow\n500x UK Cheese(H)"></textarea>
-  <div class="fast-stock-footer" style="gap:10px;flex-wrap:wrap">
-    <span id="pasteStockMessage" class="form-message"></span>
-    <button id="previewPasteStockButton" class="btn ghost" type="button">PREVIEW</button>
-    <button id="applyPasteStockButton" class="btn primary" type="button">ADD TO CURRENT STOCK</button>
-  </div>
-  <div id="pasteStockPreview" class="csv-preview"></div>
-</div>
+          
 <div class="inventory-divider"></div>
 <div class="fast-stock-card">
   <div class="admin-toolbar">
@@ -206,10 +195,10 @@
 <div class="csv-stock-card">
             <div class="admin-toolbar">
               <div>
-                <h3>CSV Products & Stock</h3>
-                <p class="admin-help">Use one CSV to update existing stock or add completely new products.</p>
+                <h3>Master Strain CSV</h3>
+                <p class="admin-help">Keep every old and new strain in one CSV. Use: Product - Strain, Type, Stock Qty. A quantity of 0 keeps the strain saved but out of stock.</p>
               </div>
-              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Product Template</button>
+              <button id="downloadStockTemplateButton" class="btn ghost" type="button">Download Master CSV</button>
             </div>
             <div class="csv-stock-controls">
               <input id="stockCsvFile" type="file" accept=".csv,text/csv">
