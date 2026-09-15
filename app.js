@@ -926,6 +926,71 @@ async function removeAdmin(id,email){
 
 
 
+let pastedStockRows=[];
+function normalizeStockProductName(v=''){
+  return String(v||'').toLowerCase().replace(/\btp\b/g,' tp ').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function parsePastedStockList(text=''){
+  const lines=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const productMap=new Map(fastStockProducts.map(p=>[normalizeStockProductName(p.name),p]));
+  const rows=[]; let current=null;
+  for(const line of lines){
+    const stock=line.match(/^(\d+)\s*[x×]\s*(.+?)\s*$/i);
+    if(stock){
+      if(current) rows.push({product:current,qty:Number(stock[1]),strain:stock[2].trim()});
+      else rows.push({product:null,header:'No product heading',qty:Number(stock[1]),strain:stock[2].trim()});
+      continue;
+    }
+    const key=normalizeStockProductName(line);
+    current=productMap.get(key)||null;
+    if(!current){
+      const candidates=fastStockProducts.filter(p=>normalizeStockProductName(p.name)===key || normalizeStockProductName(p.name).includes(key) || key.includes(normalizeStockProductName(p.name)));
+      current=candidates.length===1?candidates[0]:null;
+    }
+    if(!current) rows.push({product:null,header:line,headingOnly:true});
+  }
+  return rows;
+}
+function previewPastedStock(){
+  const msg=$('#pasteStockMessage'),box=$('#pasteStockPreview');
+  pastedStockRows=parsePastedStockList($('#pasteStockText')?.value||'');
+  const stockRows=pastedStockRows.filter(r=>!r.headingOnly);
+  const badHeadings=pastedStockRows.filter(r=>r.headingOnly);
+  if(!stockRows.length){msg.textContent='Paste a stock list first.';box.innerHTML='';return false;}
+  const bad=stockRows.filter(r=>!r.product);
+  box.innerHTML=`<div class="csv-preview-table"><table><thead><tr><th>Product</th><th>Strain</th><th>Qty to add</th><th>Status</th></tr></thead><tbody>${stockRows.map(r=>`<tr><td>${escapeHtml(r.product?.name||r.header||'Not matched')}</td><td>${escapeHtml(r.strain)}</td><td>${r.qty}</td><td>${r.product?'Ready':'Check product name'}</td></tr>`).join('')}</tbody></table></div>`;
+  if(badHeadings.length||bad.length){msg.textContent='Some product headings could not be matched. Correct the names shown before adding stock.';return false;}
+  msg.textContent=`Ready: ${stockRows.length} strain line${stockRows.length===1?'':'s'} matched automatically.`;return true;
+}
+async function applyPastedStock(){
+  if(!previewPastedStock())return;
+  const rows=pastedStockRows.filter(r=>r.product&&!r.headingOnly), byProduct=new Map();
+  rows.forEach(r=>{
+    const key=String(r.product.id); if(!byProduct.has(key))byProduct.set(key,{p:r.product,adds:[]}); byProduct.get(key).adds.push(r);
+  });
+  const btn=$('#applyPasteStockButton'),msg=$('#pasteStockMessage');btn.disabled=true;msg.textContent='Adding stock…';let saved=0;
+  try{
+    for(const {p,adds} of byProduct.values()){
+      const strains=parseStrainList(p.description);
+      for(const a of adds){
+        const base=stripStrainType(a.strain).toLowerCase();
+        const i=strains.findIndex(s=>stripStrainType(s.name).toLowerCase()===base);
+        if(i>=0){strains[i].qty=Number(strains[i].qty||0)+a.qty; if(parseStrainType(a.strain)&&!parseStrainType(strains[i].name))strains[i].name=a.strain;}
+        else strains.push({name:a.strain,qty:a.qty});
+      }
+      saveNamesToStrainLibrary(strains);
+      const normal=splitProductDescription(p.description).description;
+      const description=composeProductDescription(normal,strains.map(st=>`${st.name} = ${st.qty}`).join('\n'));
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
+      saved++;
+    }
+    $('#pasteStockText').value='';$('#pasteStockPreview').innerHTML='';pastedStockRows=[];
+    msg.textContent=`Done. Stock added automatically to ${saved} product${saved===1?'':'s'}.`;toast('Pasted stock added');
+    await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){msg.textContent=`Stopped after ${saved} product${saved===1?'':'s'}: ${err.message}`;toast('Stock update error');}
+  finally{btn.disabled=false;}
+}
+
 let fastStockProducts=[];
 function renderFastStock(){
   const box=$('#fastStockList');if(!box)return;
@@ -1295,7 +1360,7 @@ function runSurpriseMe(){
 
 $('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
 $('#masterStrainSearch')&&($('#masterStrainSearch').oninput=renderMasterStrains); $('#addMasterStrainButton')&&($('#addMasterStrainButton').onclick=addMasterStrain); $('#addSavedStrainToProduct')&&($('#addSavedStrainToProduct').onclick=addSelectedMasterStrainToProduct);
-$('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
+$('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#previewPasteStockButton').onclick=previewPastedStock; $('#applyPasteStockButton').onclick=applyPastedStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 if($('#refreshSalesButton'))$('#refreshSalesButton').onclick=loadSales;
 if($('#salesPeriod'))$('#salesPeriod').onchange=loadSales;

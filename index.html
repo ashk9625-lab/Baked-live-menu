@@ -177,7 +177,20 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
-          <div class="fast-stock-card">
+          <div class="fast-stock-card paste-stock-card">
+  <div class="admin-toolbar">
+    <div><h3>Paste Stock List</h3><p class="admin-help">Paste your normal Baked stock list. The menu will match each strain to the correct product automatically.</p></div>
+  </div>
+  <textarea id="pasteStockText" rows="12" placeholder="King Outdoor\n200x Atomic Jelly(H)\n100x Killer Tiger(S)\n\nKing Yellow\n500x UK Cheese(H)"></textarea>
+  <div class="fast-stock-footer" style="gap:10px;flex-wrap:wrap">
+    <span id="pasteStockMessage" class="form-message"></span>
+    <button id="previewPasteStockButton" class="btn ghost" type="button">PREVIEW</button>
+    <button id="applyPasteStockButton" class="btn primary" type="button">ADD TO CURRENT STOCK</button>
+  </div>
+  <div id="pasteStockPreview" class="csv-preview"></div>
+</div>
+<div class="inventory-divider"></div>
+<div class="fast-stock-card">
   <div class="admin-toolbar">
     <div><h3>Fast Stock</h3><p class="admin-help">Update all strain quantities without opening each product.</p></div>
     <button id="refreshFastStockButton" class="btn ghost" type="button">Refresh</button>
