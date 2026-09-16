@@ -234,7 +234,7 @@ function addProductStrainRow(strain={name:'',qty:0}){
   const row=document.createElement('div');
   row.className='product-strain-entry';
   row.style.cssText='display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end';
-  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" readonly value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
+  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" list="strainLibraryList" placeholder="Type or edit strain name" value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
   box.appendChild(row);
   row.querySelectorAll('input').forEach(input=>input.addEventListener('input',syncProductStrainText));
   row.querySelector('.remove-product-strain').onclick=()=>{row.remove();syncProductStrainText();};
