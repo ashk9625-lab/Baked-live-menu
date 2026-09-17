@@ -51,7 +51,7 @@ function displayCategory(category){
 }
 function buildFilters(){
   const selected=$('#categoryFilter').value;
-  const cats=[...new Set(products.map(p=>displayCategory(p.category)).filter(Boolean))].sort();
+  const cats=[...new Set([...products.map(p=>displayCategory(p.category)).filter(Boolean),'Dabs'])].sort();
   $('#categoryFilter').innerHTML='<option value="all">All categories</option>'+cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
   $('#categoryFilter').value=cats.includes(selected)?selected:'all';
   $('#categoryChips').innerHTML=['all',...cats].map(c=>`<button class="chip ${c===$('#categoryFilter').value?'active':''}" data-category="${escapeHtml(c)}">${c==='all'?'All products':escapeHtml(c)}</button>`).join('');
@@ -342,8 +342,9 @@ function productCategoryRank(p){
   const category=displayCategory(p.category).toLowerCase();
   if(category.includes('pre-roll'))return 0;
   if(category.includes('flower'))return 1;
-  if(category.includes('edible'))return 3;
-  return 2;
+  if(category.includes('dab'))return 2;
+  if(category.includes('edible'))return 4;
+  return 3;
 }
 function sortLiveProducts(list){
   return [...list].sort((a,b)=>{
