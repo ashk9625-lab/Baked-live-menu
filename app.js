@@ -579,8 +579,11 @@ async function placeOrder(e){
     cart=[];
     persistCart();
     e.target.reset();
-    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. <button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
+    let customerEditToken=null;
+    try{customerEditToken=await enableCustomerOrderEditing(orderNo);}catch(e){console.warn('Customer edit link unavailable',e);}
+    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. <button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>${customerEditToken?' <button type="button" class="text-button" id="changeMyOrderButton">Change My Order</button>':''}`;
     $('#printInvoiceButton').onclick=()=>printInvoice();
+    if(customerEditToken)$('#changeMyOrderButton').onclick=()=>openCustomerOrderEditor(orderNo,customerEditToken);
     toast(`Order ${orderNo} received`);
 
     sendOrderToLockedWhatsApps(message,whatsappWindow);
@@ -716,9 +719,10 @@ async function loadOrders(){
   try{
     const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
     adminOrdersCache=orders||[];
-    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
+    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn ghost compact edit-order" data-id="${o.id}" ${String(o.status||'')==='Cancelled'?'disabled':''}>Edit Order</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
     $$('.view-order-detail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.id));
+    $$('.edit-order').forEach(b=>b.onclick=()=>openEditOrder(b.dataset.id));
     $$('.delete-order').forEach(b=>b.onclick=()=>deleteOrder(b.dataset.id,b.dataset.number));
     updateAdminAlerts();
   }catch(err){$('#adminOrders').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
@@ -752,6 +756,105 @@ function openOrderDetail(id){
   $('#orderDetailModal').classList.remove('hidden');
   $('#orderDetailModal').setAttribute('aria-hidden','false');
   $('#drawerBackdrop').classList.remove('hidden');
+}
+
+let editingOrder=null;
+
+function openEditOrder(id){
+  const order=adminOrdersCache.find(o=>String(o.id)===String(id));
+  if(!order)return toast('Order could not be found');
+  if(String(order.status||'')==='Cancelled')return toast('Cancelled orders cannot be edited');
+  editingOrder=order;
+  $('#editOrderTitle').textContent=`Edit ${order.order_number}`;
+  const items=order.order_items||[];
+  $('#editOrderItems').innerHTML=items.map(i=>`
+    <div class="admin-row edit-order-item" data-item-id="${i.id}" style="gap:12px;align-items:center">
+      <div class="admin-row-main"><div><strong>${escapeHtml(i.product_name)}</strong><small>${money(i.unit_price)} each</small></div></div>
+      <div class="admin-row-data" style="gap:8px">
+        <label style="display:flex;align-items:center;gap:7px">Qty <input class="edit-order-qty" data-item-id="${i.id}" type="number" min="0" step="1" value="${Number(i.quantity||0)}" style="width:82px"></label>
+        <button class="btn danger compact remove-order-item" data-item-id="${i.id}" type="button">Remove</button>
+      </div>
+    </div>`).join('');
+  $$('.remove-order-item').forEach(b=>b.onclick=()=>{
+    const input=$(`.edit-order-qty[data-item-id="${b.dataset.itemId}"]`);
+    if(input)input.value=0;
+    b.closest('.edit-order-item')?.classList.add('pending-remove');
+  });
+  $('#editOrderMessage').textContent='';
+  $('#editOrderModal').classList.remove('hidden');
+  $('#editOrderModal').setAttribute('aria-hidden','false');
+  $('#drawerBackdrop').classList.remove('hidden');
+}
+
+async function adjustOrderItemInventory(item,delta,order){
+  // delta > 0 returns stock; delta < 0 deducts stock.
+  if(!delta)return;
+  const productId=item.product_id||item.product?.id;
+  if(!productId)throw new Error(`Could not identify product for ${item.product_name||'order item'}`);
+  const productRows=await api(`/rest/v1/products?select=*&id=eq.${encodeURIComponent(productId)}&limit=1`,{auth:true});
+  const product=productRows?.[0];
+  if(!product)throw new Error(`Product no longer exists: ${item.product_name||productId}`);
+  const strains=parseStrainList(product.description);
+  const displayedName=String(item.product_name||'');
+  const strainName=displayedName.includes(' — ')?displayedName.split(' — ').slice(1).join(' — ').trim():'';
+  const strainIndex=strainName?strains.findIndex(x=>x.name.toLowerCase()===strainName.toLowerCase()):-1;
+  if(strainIndex>=0){
+    const parts=splitProductDescription(product.description);
+    const updated=strains.map((strain,index)=>({...strain,qty:index===strainIndex?Math.max(0,Number(strain.qty||0)+delta):Number(strain.qty||0)}));
+    if(delta<0 && Number(strains[strainIndex].qty||0)<Math.abs(delta))throw new Error(`Not enough stock for ${displayedName}`);
+    const description=composeProductDescription(parts.description,updated.map(x=>`${x.name} = ${x.qty}`).join('\n'));
+    await api(`/rest/v1/products?id=eq.${encodeURIComponent(productId)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
+  }else{
+    if(delta<0 && Number(product.stock||0)<Math.abs(delta))throw new Error(`Not enough stock for ${displayedName}`);
+    await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:productId,p_quantity:delta,p_reference:`Edited order ${order.order_number||''}`})});
+  }
+}
+
+async function saveOrderEdits(){
+  if(!editingOrder)return;
+  const btn=$('#saveOrderEditsButton');
+  const msg=$('#editOrderMessage');
+  const originals=editingOrder.order_items||[];
+  const changes=[];
+  for(const item of originals){
+    const input=$(`.edit-order-qty[data-item-id="${item.id}"]`);
+    const newQty=Math.max(0,Math.floor(Number(input?.value||0)));
+    const oldQty=Math.max(0,Number(item.quantity||0));
+    if(newQty!==oldQty)changes.push({item,oldQty,newQty,delta:oldQty-newQty});
+  }
+  if(!changes.length){msg.textContent='No changes to save.';return;}
+  if(!confirm(`Save changes to ${editingOrder.order_number}? Stock will be adjusted automatically.`))return;
+  btn.disabled=true;msg.textContent='Saving changes…';
+  try{
+    // Adjust stock first. If a later database write fails, attempt to reverse completed stock changes.
+    const adjusted=[];
+    try{
+      for(const c of changes){await adjustOrderItemInventory(c.item,c.delta,editingOrder);adjusted.push(c);}
+      for(const c of changes){
+        if(c.newQty===0){
+          await api(`/rest/v1/order_items?id=eq.${encodeURIComponent(c.item.id)}`,{method:'DELETE',auth:true,headers:{Prefer:'return=minimal'}});
+        }else{
+          const lineTotal=Number(c.item.unit_price||0)*c.newQty;
+          await api(`/rest/v1/order_items?id=eq.${encodeURIComponent(c.item.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({quantity:c.newQty,line_total:lineTotal})});
+        }
+      }
+    }catch(err){
+      for(const c of adjusted.reverse()){try{await adjustOrderItemInventory(c.item,-c.delta,editingOrder)}catch{}}
+      throw err;
+    }
+    const remaining=originals.map(i=>{
+      const c=changes.find(x=>String(x.item.id)===String(i.id));
+      const q=c?c.newQty:Number(i.quantity||0);
+      return q>0?Number(i.unit_price||0)*q:0;
+    });
+    const newTotal=remaining.reduce((a,b)=>a+b,0);
+    await api(`/rest/v1/orders?id=eq.${encodeURIComponent(editingOrder.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({total:newTotal})});
+    msg.textContent='Order updated successfully.';
+    toast(`${editingOrder.order_number} updated`);
+    await Promise.all([loadOrders(),loadProducts()]);
+    setTimeout(()=>{closeModal('editOrderModal');},500);
+  }catch(err){msg.textContent=err.message;}
+  btn.disabled=false;
 }
 
 function printPackingSlip(order=selectedOrderDetail){
@@ -1472,3 +1575,48 @@ if('serviceWorker' in navigator){
 
 // Saved strain manager
 document.addEventListener('click',e=>{if(e.target?.id==='addProductStrainRow'){e.preventDefault();addProductStrainRow({name:'',qty:0});const rows=$$('#productStrainRows .product-strain-name');rows[rows.length-1]?.focus();}});
+
+
+// Order editing controls
+window.addEventListener('DOMContentLoaded',()=>{
+  const editBtn=document.getElementById('editOrderButton');
+  if(editBtn)editBtn.onclick=()=>selectedOrderDetail&&openEditOrder(selectedOrderDetail.id);
+  const saveBtn=document.getElementById('saveOrderEditsButton');
+  if(saveBtn)saveBtn.onclick=saveOrderEdits;
+});
+
+// Customer self-service order editing (Pending orders only)
+let customerEditingOrder=null;
+function makeCustomerEditToken(){
+  const a=new Uint8Array(24); crypto.getRandomValues(a); return [...a].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function enableCustomerOrderEditing(orderNo){
+  const token=makeCustomerEditToken();
+  const ok=await api('/rest/v1/rpc/set_customer_order_edit_token',{method:'POST',body:JSON.stringify({p_order_number:orderNo,p_token:token})});
+  if(ok){localStorage.setItem(`baked-order-edit-${orderNo}`,token);localStorage.setItem('baked-last-editable-order',orderNo);return token;}
+  return null;
+}
+async function openCustomerOrderEditor(orderNo,token){
+  try{
+    const order=await api('/rest/v1/rpc/get_customer_pending_order',{method:'POST',body:JSON.stringify({p_order_number:orderNo,p_token:token})});
+    customerEditingOrder={...order,token};
+    $('#customerEditOrderTitle').textContent=`Change ${order.order_number}`;
+    $('#customerEditOrderItems').innerHTML=(order.items||[]).map(i=>`<div class="admin-row customer-edit-order-item" data-item-id="${i.id}" style="gap:12px;align-items:center"><div class="admin-row-main"><div><strong>${escapeHtml(i.product_name)}</strong><small>${money(i.unit_price)} each</small></div></div><div class="admin-row-data"><label style="display:flex;align-items:center;gap:7px">Qty <input class="customer-edit-order-qty" data-item-id="${i.id}" type="number" min="0" step="1" value="${Number(i.quantity||0)}" style="width:82px"></label><button class="btn danger compact customer-remove-order-item" data-item-id="${i.id}" type="button">Remove</button></div></div>`).join('');
+    $$('.customer-remove-order-item').forEach(b=>b.onclick=()=>{const input=$(`.customer-edit-order-qty[data-item-id="${b.dataset.itemId}"]`);if(input)input.value='0';b.closest('.customer-edit-order-item')?.classList.add('pending-remove');});
+    $('#customerEditOrderMessage').textContent='';
+    $('#customerEditOrderModal').classList.remove('hidden');$('#customerEditOrderModal').setAttribute('aria-hidden','false');
+  }catch(err){toast(err.message);}
+}
+async function saveCustomerOrderEdits(){
+  if(!customerEditingOrder)return;
+  const btn=$('#saveCustomerOrderEditsButton'),msg=$('#customerEditOrderMessage');
+  const items=(customerEditingOrder.items||[]).map(i=>({id:i.id,quantity:Math.max(0,Math.floor(Number($(`.customer-edit-order-qty[data-item-id="${i.id}"]`)?.value||0)))}));
+  if(!items.some(i=>i.quantity>0)){msg.textContent='Keep at least one item in the order.';return;}
+  btn.disabled=true;msg.textContent='Updating order…';
+  try{
+    const updated=await api('/rest/v1/rpc/update_customer_pending_order',{method:'POST',body:JSON.stringify({p_order_number:customerEditingOrder.order_number,p_token:customerEditingOrder.token,p_items:items})});
+    customerEditingOrder={...updated,token:customerEditingOrder.token};msg.textContent='Order updated successfully. Stock has been adjusted.';toast(`${updated.order_number} updated`);await loadProducts();setTimeout(()=>closeModal('customerEditOrderModal'),650);
+  }catch(err){msg.textContent=err.message;}
+  btn.disabled=false;
+}
+window.addEventListener('DOMContentLoaded',()=>{const b=$('#saveCustomerOrderEditsButton');if(b)b.onclick=saveCustomerOrderEdits;});

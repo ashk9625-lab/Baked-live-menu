@@ -307,6 +307,17 @@
   </aside>
   <div id="drawerBackdrop" class="backdrop hidden"></div>
 
+
+  <div id="customerEditOrderModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card order-detail-card">
+      <div class="modal-head"><div><p class="eyebrow accent">CHANGE MY ORDER</p><h2 id="customerEditOrderTitle">Change My Order</h2></div><button class="icon-button" type="button" data-close="customerEditOrderModal">×</button></div>
+      <p class="admin-help">You can change quantities or remove items while your order is still Pending.</p>
+      <div id="customerEditOrderItems"></div>
+      <p id="customerEditOrderMessage" class="form-message"></p>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close="customerEditOrderModal">Close</button><button id="saveCustomerOrderEditsButton" class="btn primary" type="button">Update Order</button></div>
+    </div>
+  </div>
+
   <div id="productModal" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head"><h2 id="productModalTitle">Add product</h2><button class="icon-button" data-close="productModal">×</button></div>
@@ -360,8 +371,25 @@
       </div>
       <div id="orderDetailContent"></div>
       <div class="modal-actions order-detail-actions">
+        <button id="editOrderButton" class="btn ghost" type="button">Edit Order</button>
         <button id="printPackingSlipButton" class="btn primary" type="button">Print Packing Slip</button>
         <button class="btn ghost" type="button" data-close="orderDetailModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editOrderModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card order-detail-card">
+      <div class="modal-head">
+        <div><p class="eyebrow accent">EDIT ORDER</p><h2 id="editOrderTitle">Edit Order</h2></div>
+        <button class="icon-button" type="button" data-close="editOrderModal">×</button>
+      </div>
+      <p class="admin-help">Correct quantities or remove an incorrect item. Stock is adjusted automatically when you save.</p>
+      <div id="editOrderItems"></div>
+      <p id="editOrderMessage" class="form-message"></p>
+      <div class="modal-actions">
+        <button class="btn ghost" type="button" data-close="editOrderModal">Cancel</button>
+        <button id="saveOrderEditsButton" class="btn primary" type="button">Save Changes</button>
       </div>
     </div>
   </div>
