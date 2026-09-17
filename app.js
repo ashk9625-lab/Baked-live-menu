@@ -51,7 +51,7 @@ function displayCategory(category){
 }
 function buildFilters(){
   const selected=$('#categoryFilter').value;
-  const cats=[...new Set([...products.map(p=>displayCategory(p.category)).filter(Boolean),'Dabs'])].sort();
+  const cats=[...new Set(products.map(p=>displayCategory(p.category)).filter(Boolean))].sort();
   $('#categoryFilter').innerHTML='<option value="all">All categories</option>'+cats.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
   $('#categoryFilter').value=cats.includes(selected)?selected:'all';
   $('#categoryChips').innerHTML=['all',...cats].map(c=>`<button class="chip ${c===$('#categoryFilter').value?'active':''}" data-category="${escapeHtml(c)}">${c==='all'?'All products':escapeHtml(c)}</button>`).join('');
