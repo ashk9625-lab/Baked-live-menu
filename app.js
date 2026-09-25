@@ -752,7 +752,10 @@ let adminOrdersCache=[];
 
 async function loadOrders(){
   try{
-    const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
+    const accountCode=$('#orderAccountFilter')?.value||'CUSTOMER';
+    const accounts=await api('/rest/v1/customer_accounts?select=id,login_code&login_code=eq.'+encodeURIComponent(accountCode),{auth:true});
+    const accountId=accounts?.[0]?.id;
+    const orders=accountId?await api('/rest/v1/orders?select=*,order_items(*)&customer_account_id=eq.'+encodeURIComponent(accountId)+'&order=created_at.desc&limit=100',{auth:true}):[];
     adminOrdersCache=orders||[];
     $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn ghost compact edit-order" data-id="${o.id}" ${String(o.status||'')==='Cancelled'?'disabled':''}>Edit Order</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
@@ -1142,6 +1145,7 @@ async function saveFastStock(){
   finally{btn.disabled=false;}
 }
 
+if($('#orderAccountFilter'))$('#orderAccountFilter').onchange=loadOrders;
 if($('#customerLogoutButton'))$('#customerLogoutButton').onclick=customerAccessLogout;
 if($('#customerStockAccount'))$('#customerStockAccount').onchange=loadCustomerStock;
 if($('#customerStockSearch'))$('#customerStockSearch').oninput=renderCustomerStock;
