@@ -13,7 +13,7 @@ const FALLBACK_PRODUCTS = [
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
 let activeVaultFilter='all';
-let siteSettings={store_open:true,auto_hours:false,opening_time:'09:00',closing_time:'18:00',banner_text:''};
+let siteSettings={store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59',banner_text:''};
 let deferredInstallPrompt=null;
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const money = (v) => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:0}).format(Number(v||0));
@@ -128,6 +128,126 @@ function composeProductDescription(normalDescription='',strainText=''){
   if(!strains.length)return cleanDesc;
   return `${cleanDesc}${cleanDesc?'\n\n':''}[[STRAINS]]\n${strains.map(s=>`${s.name} = ${s.qty}`).join('\n')}`;
 }
+function getSavedStrainLibrary(){
+  const names=new Map();
+  const add=name=>{
+    const clean=String(name||'').trim().replace(/\s+/g,' ');
+    if(clean&&!names.has(clean.toLowerCase()))names.set(clean.toLowerCase(),clean);
+  };
+  try{(JSON.parse(localStorage.getItem('baked-strain-library')||'[]')||[]).forEach(add);}catch{}
+  (products||[]).forEach(p=>parseStrainList(p.description).forEach(s=>add(s.name)));
+  return [...names.values()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}));
+}
+function saveNamesToStrainLibrary(strains=[]){
+  const names=new Map(getSavedStrainLibrary().map(n=>[n.toLowerCase(),n]));
+  strains.forEach(s=>{const n=String(s.name||'').trim().replace(/\s+/g,' ');if(n)names.set(n.toLowerCase(),n);});
+  localStorage.setItem('baked-strain-library',JSON.stringify([...names.values()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}))));
+}
+function refreshStrainLibraryDatalist(){
+  const list=$('#strainLibraryList');if(!list)return;
+  list.innerHTML=getSavedStrainLibrary().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
+}
+function parseStrainType(name=''){
+  const m=String(name||'').trim().match(/\(([SIH])\)\s*$/i);
+  return m?m[1].toUpperCase():'';
+}
+function stripStrainType(name=''){
+  return String(name||'').trim().replace(/\s*\(([SIH])\)\s*$/i,'').trim();
+}
+function getMasterStrains(){
+  const map=new Map();
+  const add=(name,type='')=>{
+    const base=stripStrainType(name).replace(/\s+/g,' ').trim();
+    const t=(type||parseStrainType(name)||'').toUpperCase();
+    if(!base)return;
+    const key=base.toLowerCase();
+    const current=map.get(key);
+    if(!current||(!current.type&&t))map.set(key,{name:base,type:['S','I','H'].includes(t)?t:''});
+  };
+  try{(JSON.parse(localStorage.getItem('baked-master-strains')||'[]')||[]).forEach(x=>typeof x==='string'?add(x):add(x.name,x.type));}catch{}
+  getSavedStrainLibrary().forEach(n=>add(n));
+  (products||[]).forEach(p=>parseStrainList(p.description).forEach(st=>add(st.name)));
+  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}));
+}
+function saveMasterStrains(list){
+  localStorage.setItem('baked-master-strains',JSON.stringify(list));
+  const names=list.map(x=>`${x.name}${x.type?` (${x.type})`:''}`);
+  localStorage.setItem('baked-strain-library',JSON.stringify(names));
+  refreshStrainLibraryDatalist();
+  refreshProductSavedStrainSelect();
+}
+function displayMasterStrain(st){return `${st.name}${st.type?` (${st.type})`:''}`;}
+function refreshProductSavedStrainSelect(){
+  const sel=$('#productSavedStrain');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">Select strain…</option>'+getMasterStrains().map(st=>`<option value="${escapeHtml(displayMasterStrain(st))}">${escapeHtml(displayMasterStrain(st))}</option>`).join('');
+  if([...sel.options].some(o=>o.value===current))sel.value=current;
+}
+function renderMasterStrains(){
+  const box=$('#masterStrainList');if(!box)return;
+  const q=String($('#masterStrainSearch')?.value||'').trim().toLowerCase();
+  const all=getMasterStrains();
+  const rows=all.filter(st=>!q||displayMasterStrain(st).toLowerCase().includes(q));
+  box.innerHTML=rows.length?rows.map(st=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${escapeHtml(st.type||'•')}</span><div><strong>${escapeHtml(st.name)}</strong><small>${st.type?escapeHtml(st.type==='S'?'Sativa':st.type==='I'?'Indica':'Hybrid'):'Type not set'}</small></div></div><div class="admin-row-data"><button class="btn danger compact delete-master-strain" data-name="${escapeHtml(st.name)}">Delete</button></div></article>`).join(''):'<div class="empty-state"><p>No saved strains found.</p></div>';
+  $$('.delete-master-strain').forEach(b=>b.onclick=()=>{
+    const name=b.dataset.name;
+    saveMasterStrains(getMasterStrains().filter(st=>st.name.toLowerCase()!==String(name).toLowerCase()));
+    renderMasterStrains();
+    const msg=$('#masterStrainMessage');if(msg)msg.textContent=`${name} removed from Master Strains.`;
+  });
+}
+function addMasterStrain(){
+  const input=$('#masterStrainName'),type=$('#masterStrainType'),msg=$('#masterStrainMessage');
+  const name=stripStrainType(input?.value||'').replace(/\s+/g,' ').trim();
+  const t=String(type?.value||'').toUpperCase();
+  if(!name){if(msg)msg.textContent='Enter a strain name.';return;}
+  const list=getMasterStrains();
+  const i=list.findIndex(st=>st.name.toLowerCase()===name.toLowerCase());
+  const item={name,type:['S','I','H'].includes(t)?t:''};
+  if(i>=0)list[i]={...list[i],...item};else list.push(item);
+  saveMasterStrains(list.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})));
+  if(input)input.value='';if(type)type.value='';if(msg)msg.textContent=`${displayMasterStrain(item)} saved.`;
+  renderMasterStrains();
+}
+function addSelectedMasterStrainToProduct(){
+  const sel=$('#productSavedStrain');
+  const qty=Number($('#productSavedStrainQty')?.value||0);
+  const name=String(sel?.value||'').trim();
+  if(!name)return toast('Select a saved strain');
+  if(!Number.isInteger(qty)||qty<0)return toast('Enter a valid quantity');
+  const existing=$$('#productStrainRows .product-strain-entry').find(r=>(r.querySelector('.product-strain-name')?.value||'').trim().toLowerCase()===name.toLowerCase());
+  if(existing){existing.querySelector('.product-strain-qty').value=qty;syncProductStrainText();toast('Strain quantity updated');}
+  else addProductStrainRow({name,qty});
+  if(sel)sel.value='';if($('#productSavedStrainQty'))$('#productSavedStrainQty').value='0';
+}
+function syncProductStrainText(){
+  const rows=[...document.querySelectorAll('#productStrainRows .product-strain-entry')];
+  const strains=rows.map(row=>({
+    name:row.querySelector('.product-strain-name')?.value.trim()||'',
+    qty:Number(row.querySelector('.product-strain-qty')?.value||0)
+  })).filter(s=>s.name&&Number.isInteger(s.qty)&&s.qty>=0);
+  const field=$('#productStrains');if(field)field.value=strains.map(s=>`${s.name} = ${s.qty}`).join('\n');
+  return strains;
+}
+function addProductStrainRow(strain={name:'',qty:0}){
+  const box=$('#productStrainRows');if(!box)return;
+  const row=document.createElement('div');
+  row.className='product-strain-entry';
+  row.style.cssText='display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end';
+  row.innerHTML=`<label style="margin:0">Strain<input class="product-strain-name" list="strainLibraryList" placeholder="Type or edit strain name" value="${escapeHtml(strain.name||'')}"></label><label style="margin:0">Quantity<input class="product-strain-qty" type="number" min="0" step="1" inputmode="numeric" value="${Number.isFinite(Number(strain.qty))?Math.max(0,Number(strain.qty)):0}"></label><button type="button" class="btn ghost compact remove-product-strain" aria-label="Remove strain">Remove</button>`;
+  box.appendChild(row);
+  row.querySelectorAll('input').forEach(input=>input.addEventListener('input',syncProductStrainText));
+  row.querySelector('.remove-product-strain').onclick=()=>{row.remove();syncProductStrainText();};
+  refreshStrainLibraryDatalist();
+}
+function renderProductStrainManager(strains=[]){
+  const box=$('#productStrainRows');if(!box)return;
+  box.innerHTML='';
+  refreshStrainLibraryDatalist();
+  if(strains.length)strains.forEach(addProductStrainRow);
+  else addProductStrainRow({name:'',qty:0});
+  syncProductStrainText();
+}
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
   const strains=parseStrainList(p.description);
@@ -165,18 +285,106 @@ function addStrainToCart(p,strain,requestedQuantity=1){
   toast(`${amount} × ${strain.name} added to cart`);
 }
 
+function preRollDisplayRank(p){
+  const category=displayCategory(p.category).toLowerCase();
+  if(!category.includes('pre-roll'))return 9999;
+  const text=`${p.name||''} ${p.group_name||''}`.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+
+  // Exact Baked pre-roll display sequence requested.
+  const sequence=[
+    ['king outdoor', false],
+    ['king outdoor', true],
+    ['king yellow', false],
+    ['king yellow', true],
+    ['mini yellow', null],
+    ['king orange', false],
+    ['king orange', true],
+    ['mini orange', null],
+    ['king green', false],
+    ['king green', true],
+    ['mini green', null],
+    ['king silver', false],
+    ['king silver', true],
+    ['mini silver', null],
+    ['king gold', false],
+    ['king gold', true],
+    ['mini gold', null],
+    ['king platinum', false],
+    ['mini platinum', null],
+    ['king exotic', null],
+    ['mini exotic', null]
+  ];
+  const isTp=/\b(tp|tube|tubes)\b/.test(text);
+  for(let i=0;i<sequence.length;i++){
+    const [label,tpRequired]=sequence[i];
+    if(!text.includes(label))continue;
+    if(tpRequired===true && !isTp)continue;
+    if(tpRequired===false && isTp)continue;
+    return i;
+  }
+  return 1000;
+}
+function flowerDisplayRank(p){
+  const category=displayCategory(p.category).toLowerCase();
+  if(!category.includes('flower'))return 9999;
+  const text=`${p.name||''} ${p.group_name||''}`.toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  const sequence=['orange flower','green flower','silver flower','gold flower','platinum flower'];
+  for(let i=0;i<sequence.length;i++){
+    const label=sequence[i];
+    if(text.includes(label))return i;
+    // Also support products where the range and Flower are split between name/group/category.
+    const range=label.replace(' flower','');
+    if(text.includes(range))return i;
+  }
+  return 1000;
+}
+function productCategoryRank(p){
+  const category=displayCategory(p.category).toLowerCase();
+  if(category.includes('pre-roll'))return 0;
+  if(category.includes('flower'))return 1;
+  if(category.includes('dab'))return 2;
+  if(category.includes('edible'))return 4;
+  return 3;
+}
+function sortLiveProducts(list){
+  return [...list].sort((a,b)=>{
+    const aCategory=displayCategory(a.category).toLowerCase();
+    const bCategory=displayCategory(b.category).toLowerCase();
+    const categoryRank=productCategoryRank(a)-productCategoryRank(b);
+    if(categoryRank)return categoryRank;
+
+    const aPre=aCategory.includes('pre-roll');
+    const bPre=bCategory.includes('pre-roll');
+    if(aPre&&bPre){
+      const rank=preRollDisplayRank(a)-preRollDisplayRank(b);
+      if(rank)return rank;
+    }
+
+    const aFlower=aCategory.includes('flower');
+    const bFlower=bCategory.includes('flower');
+    if(aFlower&&bFlower){
+      const rank=flowerDisplayRank(a)-flowerDisplayRank(b);
+      if(rank)return rank;
+    }
+
+    return `${displayCategory(a.category)} ${a.group_name||''} ${a.name||''}`.localeCompare(`${displayCategory(b.category)} ${b.group_name||''} ${b.name||''}`,undefined,{numeric:true,sensitivity:'base'});
+  });
+}
+
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
-  const shown=products.filter(p=>{
+  const shown=sortLiveProducts(products.filter(p=>{
     const state=stockState(p)[0], hay=`${p.name} ${p.sku} ${p.group_name} ${p.category} ${p.description}`.toLowerCase();
     return (!term||hay.includes(term))&&(cat==='all'||displayCategory(p.category)===cat)&&(filter==='all'||filter===state)&&(activeVaultFilter==='all'||isVaultProduct(p,activeVaultFilter));
-  });
+  }));
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
-    const [state,label]=stockState(p), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strains=parseStrainList(p.description);
+    const availableStock=strains.length?strains.reduce((sum,s)=>sum+Number(s.qty||0),0):Number(p.stock||0);
+    const effectiveProduct={...p,stock:availableStock};
+    const [state,label]=stockState(effectiveProduct), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
-    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${p.stock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${p.stock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${p.stock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(p.stock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(p.stock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
+    return `<article class="product-card ${strains.length?'has-strains':''}" ${strains.length?`data-strain-card="${p.id}"`:''}><div class="product-image">${img}<span class="badge ${state}">${label}</span></div><div class="product-body"><div class="product-meta"><span>${escapeHtml(p.group_name||displayCategory(p.category)||'Product')}</span><span>${escapeHtml(p.strength||'')}</span></div><h3>${escapeHtml(p.name)}</h3>${strainSummary}<div class="product-footer"><div><strong>${money(p.price)}</strong><small>${availableStock} available</small></div><div class="product-order-controls"><input class="product-quantity" data-id="${p.id}" type="number" min="1" max="${availableStock}" value="1" inputmode="numeric" aria-label="Quantity for ${escapeHtml(p.name)}" ${(availableStock<=0||!orderingAllowed())?'disabled':''}><button class="btn ${availableStock>0?'primary':'disabled'} add-button" data-id="${p.id}" ${(availableStock<=0||!orderingAllowed())?'disabled':''}>${orderingAllowed()?(availableStock>0?'Add to cart':'Unavailable'):'Store closed'}</button></div></div></div></article>`;
   }).join(''):`<div class="empty-state wide"><h3>No matching products</h3><p>Try another category or search term.</p></div>`;
   $$('.add-button').forEach(b=>b.onclick=e=>{e.stopPropagation(); const p=products.find(x=>String(x.id)===String(b.dataset.id)); if(p&&parseStrainList(p.description).length)return openStrainModal(p.id); const input=document.querySelector(`.product-quantity[data-id="${b.dataset.id}"]`); addToCart(b.dataset.id,Number(input?.value||1));});
   $$('.product-quantity').forEach(i=>i.onclick=e=>e.stopPropagation());
@@ -283,24 +491,36 @@ function sendOrderToLockedWhatsApps(message, firstWindow=null){
   });
 }
 
+function extractNsftPoNo(note){
+  const text=String(note||'');
+  const match=text.match(/(?:^|\n)NSFT PO NO:\s*([^\n]*)/i);
+  return match ? match[1].trim() : '';
+}
+function cleanOrderNote(note){
+  return String(note||'').replace(/(?:^|\n)NSFT PO NO:\s*[^\n]*(?:\n|$)/i,'\n').trim();
+}
+
 function buildWhatsAppOrderMessage(orderNo, customerName, customerPhone, note, orderedItems) {
   const total = orderedItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
   const itemLines = orderedItems.map(item =>
     `${item.quantity} x ${item.name} - ${money(Number(item.price) * Number(item.quantity))}`
   );
 
+  const nsftPoNo=extractNsftPoNo(note);
+  const customerNote=cleanOrderNote(note);
   return [
     '*NEW BAKED LIVE MENU ORDER*',
     '',
     `Order: ${orderNo}`,
     `Customer: ${customerName}`,
     `Phone: ${customerPhone}`,
+    nsftPoNo ? `NSFT PO No: ${nsftPoNo}` : '',
     '',
     '*Items:*',
     ...itemLines,
     '',
     `*Total: ${money(total)}*`,
-    note ? `Note: ${note}` : '',
+    customerNote ? `Note: ${customerNote}` : '',
     '',
     'Please confirm availability and collection/delivery details.'
   ].filter(Boolean).join('\n');
@@ -314,7 +534,7 @@ function printInvoice(order=lastOrderForInvoice){
   const total=order.items.reduce((sum,item)=>sum+item.price*item.quantity,0);
   const invoiceWindow=window.open('','_blank','width=900,height=750');
   if(!invoiceWindow) return toast('Allow pop-ups to print the invoice');
-  invoiceWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${escapeHtml(order.orderNo)}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;max-width:850px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #111;padding-bottom:20px;margin-bottom:25px}.brand{font-size:28px;font-weight:800}.muted{color:#666}table{width:100%;border-collapse:collapse;margin-top:25px}th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}th{background:#f3f3f3}.total{font-size:20px;font-weight:800;text-align:right;margin-top:25px}.note{margin-top:25px;padding:15px;background:#f7f7f7}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="brand">BAKED AFRICA</div><div class="muted">Live Menu Order Invoice</div></div><div><strong>Invoice ${escapeHtml(order.orderNo)}</strong><br><span class="muted">${new Date(order.createdAt).toLocaleString('en-ZA')}</span></div></div><p><strong>Customer:</strong> ${escapeHtml(order.customerName)}<br><strong>Cellphone:</strong> ${escapeHtml(order.customerPhone)}</p><table><thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${money(total)}</div>${order.note?`<div class="note"><strong>Order note:</strong><br>${escapeHtml(order.note)}</div>`:''}<p class="muted" style="margin-top:35px">Thank you for your order. This invoice confirms the order request and is subject to final stock confirmation.</p><button onclick="window.print()">Print invoice</button></body></html>`);
+  invoiceWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${escapeHtml(order.orderNo)}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;max-width:850px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #111;padding-bottom:20px;margin-bottom:25px}.brand{font-size:28px;font-weight:800}.muted{color:#666}table{width:100%;border-collapse:collapse;margin-top:25px}th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}th{background:#f3f3f3}.total{font-size:20px;font-weight:800;text-align:right;margin-top:25px}.note{margin-top:25px;padding:15px;background:#f7f7f7}@media print{button{display:none}}</style></head><body><div class="head"><div><div class="brand">BAKED AFRICA</div><div class="muted">Live Menu Order Invoice</div></div><div><strong>Invoice ${escapeHtml(order.orderNo)}</strong><br><span class="muted">${new Date(order.createdAt).toLocaleString('en-ZA')}</span></div></div><p><strong>Customer:</strong> ${escapeHtml(order.customerName)}<br><strong>Cellphone:</strong> ${escapeHtml(order.customerPhone)}${extractNsftPoNo(order.note)?`<br><strong>NSFT PO No:</strong> ${escapeHtml(extractNsftPoNo(order.note))}`:''}</p><table><thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${money(total)}</div>${cleanOrderNote(order.note)?`<div class="note"><strong>Order note:</strong><br>${escapeHtml(cleanOrderNote(order.note))}</div>`:''}<p class="muted" style="margin-top:35px">Thank you for your order. This invoice confirms the order request and is subject to final stock confirmation.</p><button onclick="window.print()">Print invoice</button></body></html>`);
   invoiceWindow.document.close();
   invoiceWindow.focus();
   setTimeout(()=>invoiceWindow.print(),300);
@@ -326,7 +546,9 @@ async function placeOrder(e){
   const btn=$('#placeOrderButton');
   const customerName=$('#customerName').value.trim();
   const customerPhone=LOCKED_ORDER_CONTACT_NUMBER;
-  const note=$('#customerNote').value.trim();
+  const nsftPoNo=$('#nsftPoNo')?.value.trim()||'';
+  const customerNote=$('#customerNote').value.trim();
+  const note=[nsftPoNo ? `NSFT PO NO: ${nsftPoNo}` : '', customerNote].filter(Boolean).join('\n');
   const orderedItems=cart.map(item=>({...item}));
 
   // Open a blank tab immediately so browsers do not block WhatsApp after the database request.
@@ -357,8 +579,11 @@ async function placeOrder(e){
     cart=[];
     persistCart();
     e.target.reset();
-    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. <button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>`;
+    let customerEditToken=null;
+    try{customerEditToken=await enableCustomerOrderEditing(orderNo);}catch(e){console.warn('Customer edit link unavailable',e);}
+    $('#checkoutMessage').innerHTML=`Order ${escapeHtml(orderNo)} submitted successfully. <button type="button" class="text-button" id="printInvoiceButton">Print invoice</button>${customerEditToken?' <button type="button" class="text-button" id="changeMyOrderButton">Change My Order</button>':''}`;
     $('#printInvoiceButton').onclick=()=>printInvoice();
+    if(customerEditToken)$('#changeMyOrderButton').onclick=()=>openCustomerOrderEditor(orderNo,customerEditToken);
     toast(`Order ${orderNo} received`);
 
     sendOrderToLockedWhatsApps(message,whatsappWindow);
@@ -394,7 +619,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers()]); await updateAdminAlerts(); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers(),loadAdminSuggestions()]); await updateAdminAlerts(); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -406,11 +631,12 @@ async function loadAdminProducts(){
   try{ const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc',{auth:true}); renderAdminProducts(data); }catch(err){ $('#adminProducts').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; }
 }
 function renderAdminProducts(data){
-  $('#adminProducts').innerHTML=data.length?data.map(p=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${initials(p.name)}</span><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)} · ${escapeHtml(p.group_name||p.category)} · ${money(p.price)}</small></div></div><div class="admin-row-data"><span class="stock-number ${p.stock<=p.reorder_level?'warning':''}">${p.stock} units</span><span class="visibility ${p.active?'active':'inactive'}">${p.active?'Visible':'Hidden'}</span><button class="btn ghost compact feature-product" data-id="${p.id}">${p.featured?'★ Featured':'☆ Feature'}</button><button class="btn ghost compact edit-product" data-id="${p.id}">Edit</button><button class="btn ghost compact stock-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Stock</button><button class="btn danger compact delete-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}" data-sku="${escapeHtml(p.sku||'')}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No products yet</h3><p>Add your first live menu product.</p></div>';
-  $$('.edit-product').forEach(b=>b.onclick=()=>openProductModal(data.find(p=>String(p.id)===String(b.dataset.id))));
+  const ordered=sortLiveProducts(data);
+  $('#adminProducts').innerHTML=ordered.length?ordered.map(p=>`<article class="admin-row"><div class="admin-row-main"><span class="admin-icon">${initials(p.name)}</span><div><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku)} · ${escapeHtml(p.group_name||p.category)} · ${money(p.price)}</small></div></div><div class="admin-row-data"><span class="stock-number ${p.stock<=p.reorder_level?'warning':''}">${p.stock} units</span><span class="visibility ${p.active?'active':'inactive'}">${p.active?'Visible':'Hidden'}</span><button class="btn ghost compact feature-product" data-id="${p.id}">${p.featured?'★ Featured':'☆ Feature'}</button><button class="btn ghost compact edit-product" data-id="${p.id}">Edit</button><button class="btn ghost compact stock-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}">Stock</button><button class="btn danger compact delete-product" data-id="${p.id}" data-name="${escapeHtml(p.name)}" data-sku="${escapeHtml(p.sku||'')}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No products yet</h3><p>Add your first live menu product.</p></div>';
+  $$('.edit-product').forEach(b=>b.onclick=()=>openProductModal(ordered.find(p=>String(p.id)===String(b.dataset.id))));
   $$('.stock-product').forEach(b=>b.onclick=()=>openStockModal(b.dataset.id,b.dataset.name));
   $$('.delete-product').forEach(b=>b.onclick=()=>deleteProduct(b.dataset.id,b.dataset.name,b,b.dataset.sku));
-  $$('.feature-product').forEach(b=>b.onclick=()=>toggleFeatured(b.dataset.id,data.find(p=>String(p.id)===String(b.dataset.id))?.featured));
+  $$('.feature-product').forEach(b=>b.onclick=()=>toggleFeatured(b.dataset.id,ordered.find(p=>String(p.id)===String(b.dataset.id))?.featured));
 }
 async function deleteProduct(id,name,button,sku=''){
   const label=sku?`${name} (${sku})`:name;
@@ -472,11 +698,13 @@ async function deleteProduct(id,name,button,sku=''){
 
 function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
-  if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productStrains').value=formatStrainsForAdmin(p.description);$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
+  if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
+  renderProductStrainManager(p?parseStrainList(p.description):[]);
+  refreshProductSavedStrainSelect();
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
-  e.preventDefault(); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
+  e.preventDefault(); const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:$('#productActive').checked,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
   try{ await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)}); closeOverlays(); toast(id?'Product updated':'Product added'); await Promise.all([loadAdminProducts(),loadProducts()]); }catch(err){ $('#productFormMessage').textContent=err.message; }
 }
@@ -491,9 +719,10 @@ async function loadOrders(){
   try{
     const orders=await api('/rest/v1/orders?select=*,order_items(*)&order=created_at.desc&limit=100',{auth:true});
     adminOrdersCache=orders||[];
-    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
+    $('#adminOrders').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(o.order_number)}</strong><small>${new Date(o.created_at).toLocaleString('en-ZA')}</small></div><select class="order-status" data-id="${o.id}">${['Pending','Confirmed','Ready','Completed','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="customer-line"><strong>${escapeHtml(o.customer_name)}</strong><span>${escapeHtml(o.customer_phone)}</span></div><ul>${(o.order_items||[]).map(i=>`<li><span>${i.quantity} × ${escapeHtml(i.product_name)}</span><strong>${money(i.line_total)}</strong></li>`).join('')}</ul>${o.note?`<p class="order-note">${escapeHtml(o.note)}</p>`:''}<div class="order-total"><span>Total</span><strong>${money(o.total)}</strong></div><div class="order-actions"><button class="btn primary compact view-order-detail" data-id="${o.id}">View / Packing Slip</button><button class="btn ghost compact edit-order" data-id="${o.id}" ${String(o.status||'')==='Cancelled'?'disabled':''}>Edit Order</button><button class="btn danger compact delete-order" data-id="${o.id}" data-number="${escapeHtml(o.order_number)}">Delete order</button></div></article>`).join(''):'<div class="empty-state"><h3>No orders yet</h3><p>New customer orders will appear here.</p></div>';
     $$('.order-status').forEach(s=>s.onchange=()=>setOrderStatus(s.dataset.id,s.value));
     $$('.view-order-detail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.id));
+    $$('.edit-order').forEach(b=>b.onclick=()=>openEditOrder(b.dataset.id));
     $$('.delete-order').forEach(b=>b.onclick=()=>deleteOrder(b.dataset.id,b.dataset.number));
     updateAdminAlerts();
   }catch(err){$('#adminOrders').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
@@ -511,7 +740,8 @@ function openOrderDetail(id){
   $('#orderDetailContent').innerHTML=`
     <div class="order-detail-meta">
       <div><span>Customer</span><strong>${escapeHtml(order.customer_name||'')}</strong></div>
-      <div><span>Contact</span><strong>${escapeHtml(order.customer_phone||'')}</strong></div>
+      <div><span>BAKED CSS</span><strong>____________________</strong></div>
+      <div><span>NSFT PO No</span><strong>${escapeHtml(extractNsftPoNo(order.note)||'—')}</strong></div>
       <div><span>Date</span><strong>${new Date(order.created_at).toLocaleString('en-ZA')}</strong></div>
       <div><span>Status</span><strong>${escapeHtml(order.status||'Pending')}</strong></div>
     </div>
@@ -521,16 +751,116 @@ function openOrderDetail(id){
         <tbody>${items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td>${money(i.unit_price)}</td><td>${money(i.line_total)}</td></tr>`).join('')}</tbody>
       </table>
     </div>
-    ${order.note?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(order.note)}</p></div>`:''}
+    ${cleanOrderNote(order.note)?`<div class="order-detail-note"><strong>Order Notes</strong><p>${escapeHtml(cleanOrderNote(order.note))}</p></div>`:''}
     <div class="order-detail-total"><span>Order Total</span><strong>${money(order.total)}</strong></div>`;
   $('#orderDetailModal').classList.remove('hidden');
   $('#orderDetailModal').setAttribute('aria-hidden','false');
   $('#drawerBackdrop').classList.remove('hidden');
 }
 
+let editingOrder=null;
+
+function openEditOrder(id){
+  const order=adminOrdersCache.find(o=>String(o.id)===String(id));
+  if(!order)return toast('Order could not be found');
+  if(String(order.status||'')==='Cancelled')return toast('Cancelled orders cannot be edited');
+  editingOrder=order;
+  $('#editOrderTitle').textContent=`Edit ${order.order_number}`;
+  const items=order.order_items||[];
+  $('#editOrderItems').innerHTML=items.map(i=>`
+    <div class="admin-row edit-order-item" data-item-id="${i.id}" style="gap:12px;align-items:center">
+      <div class="admin-row-main"><div><strong>${escapeHtml(i.product_name)}</strong><small>${money(i.unit_price)} each</small></div></div>
+      <div class="admin-row-data" style="gap:8px">
+        <label style="display:flex;align-items:center;gap:7px">Qty <input class="edit-order-qty" data-item-id="${i.id}" type="number" min="0" step="1" value="${Number(i.quantity||0)}" style="width:82px"></label>
+        <button class="btn danger compact remove-order-item" data-item-id="${i.id}" type="button">Remove</button>
+      </div>
+    </div>`).join('');
+  $$('.remove-order-item').forEach(b=>b.onclick=()=>{
+    const input=$(`.edit-order-qty[data-item-id="${b.dataset.itemId}"]`);
+    if(input)input.value=0;
+    b.closest('.edit-order-item')?.classList.add('pending-remove');
+  });
+  $('#editOrderMessage').textContent='';
+  $('#editOrderModal').classList.remove('hidden');
+  $('#editOrderModal').setAttribute('aria-hidden','false');
+  $('#drawerBackdrop').classList.remove('hidden');
+}
+
+async function adjustOrderItemInventory(item,delta,order){
+  // delta > 0 returns stock; delta < 0 deducts stock.
+  if(!delta)return;
+  const productId=item.product_id||item.product?.id;
+  if(!productId)throw new Error(`Could not identify product for ${item.product_name||'order item'}`);
+  const productRows=await api(`/rest/v1/products?select=*&id=eq.${encodeURIComponent(productId)}&limit=1`,{auth:true});
+  const product=productRows?.[0];
+  if(!product)throw new Error(`Product no longer exists: ${item.product_name||productId}`);
+  const strains=parseStrainList(product.description);
+  const displayedName=String(item.product_name||'');
+  const strainName=displayedName.includes(' — ')?displayedName.split(' — ').slice(1).join(' — ').trim():'';
+  const strainIndex=strainName?strains.findIndex(x=>x.name.toLowerCase()===strainName.toLowerCase()):-1;
+  if(strainIndex>=0){
+    const parts=splitProductDescription(product.description);
+    const updated=strains.map((strain,index)=>({...strain,qty:index===strainIndex?Math.max(0,Number(strain.qty||0)+delta):Number(strain.qty||0)}));
+    if(delta<0 && Number(strains[strainIndex].qty||0)<Math.abs(delta))throw new Error(`Not enough stock for ${displayedName}`);
+    const description=composeProductDescription(parts.description,updated.map(x=>`${x.name} = ${x.qty}`).join('\n'));
+    await api(`/rest/v1/products?id=eq.${encodeURIComponent(productId)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
+  }else{
+    if(delta<0 && Number(product.stock||0)<Math.abs(delta))throw new Error(`Not enough stock for ${displayedName}`);
+    await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:productId,p_quantity:delta,p_reference:`Edited order ${order.order_number||''}`})});
+  }
+}
+
+async function saveOrderEdits(){
+  if(!editingOrder)return;
+  const btn=$('#saveOrderEditsButton');
+  const msg=$('#editOrderMessage');
+  const originals=editingOrder.order_items||[];
+  const changes=[];
+  for(const item of originals){
+    const input=$(`.edit-order-qty[data-item-id="${item.id}"]`);
+    const newQty=Math.max(0,Math.floor(Number(input?.value||0)));
+    const oldQty=Math.max(0,Number(item.quantity||0));
+    if(newQty!==oldQty)changes.push({item,oldQty,newQty,delta:oldQty-newQty});
+  }
+  if(!changes.length){msg.textContent='No changes to save.';return;}
+  if(!confirm(`Save changes to ${editingOrder.order_number}? Stock will be adjusted automatically.`))return;
+  btn.disabled=true;msg.textContent='Saving changes…';
+  try{
+    // Adjust stock first. If a later database write fails, attempt to reverse completed stock changes.
+    const adjusted=[];
+    try{
+      for(const c of changes){await adjustOrderItemInventory(c.item,c.delta,editingOrder);adjusted.push(c);}
+      for(const c of changes){
+        if(c.newQty===0){
+          await api(`/rest/v1/order_items?id=eq.${encodeURIComponent(c.item.id)}`,{method:'DELETE',auth:true,headers:{Prefer:'return=minimal'}});
+        }else{
+          const lineTotal=Number(c.item.unit_price||0)*c.newQty;
+          await api(`/rest/v1/order_items?id=eq.${encodeURIComponent(c.item.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({quantity:c.newQty,line_total:lineTotal})});
+        }
+      }
+    }catch(err){
+      for(const c of adjusted.reverse()){try{await adjustOrderItemInventory(c.item,-c.delta,editingOrder)}catch{}}
+      throw err;
+    }
+    const remaining=originals.map(i=>{
+      const c=changes.find(x=>String(x.item.id)===String(i.id));
+      const q=c?c.newQty:Number(i.quantity||0);
+      return q>0?Number(i.unit_price||0)*q:0;
+    });
+    const newTotal=remaining.reduce((a,b)=>a+b,0);
+    await api(`/rest/v1/orders?id=eq.${encodeURIComponent(editingOrder.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({total:newTotal})});
+    msg.textContent='Order updated successfully.';
+    toast(`${editingOrder.order_number} updated`);
+    await Promise.all([loadOrders(),loadProducts()]);
+    setTimeout(()=>{closeModal('editOrderModal');},500);
+  }catch(err){msg.textContent=err.message;}
+  btn.disabled=false;
+}
+
 function printPackingSlip(order=selectedOrderDetail){
   if(!order)return toast('Open an order first');
   const items=order.order_items||[];
+  const totalPieces=items.reduce((sum,i)=>sum+Number(i.quantity||0),0);
   const rows=items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
   const w=window.open('','_blank','width=900,height=800');
   if(!w)return toast('Allow pop-ups to print the packing slip');
@@ -542,14 +872,15 @@ function printPackingSlip(order=selectedOrderDetail){
   .info{display:grid;grid-template-columns:1fr 1fr;gap:8px 30px;margin:20px 0}.info div{border-bottom:1px solid #ddd;padding:8px 0}
   table{width:100%;border-collapse:collapse;margin-top:22px}th,td{border:1px solid #bbb;padding:13px;text-align:left}th{background:#f1f1f1}
   th:nth-child(2),td:nth-child(2){width:110px;text-align:center}th:nth-child(3),td:nth-child(3){width:150px;text-align:center}
-  .packing-box{height:34px}.notes{margin-top:20px;border:1px solid #ccc;padding:14px;min-height:55px}
+  .packing-box{height:34px}.pieces-total{margin-top:12px;border:2px solid #111;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:900}.notes{margin-top:20px;border:1px solid #ccc;padding:14px;min-height:55px}
   .sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:55px}.line{border-top:1px solid #111;padding-top:7px;font-size:12px}
   button{margin-top:25px;padding:10px 18px}@media print{button{display:none}body{padding:5px}}
   </style></head><body>
   <div class="head"><div><div class="brand">BAKED AFRICA</div><div class="sub">ORDER & PACKING SHEET</div></div><div><strong>${escapeHtml(order.order_number)}</strong><div class="sub">${new Date(order.created_at).toLocaleString('en-ZA')}</div></div></div>
-  <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>Contact:</strong> ${escapeHtml(order.customer_phone||'')}</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
+  <div class="info"><div><strong>Customer:</strong> ${escapeHtml(order.customer_name||'')}</div><div><strong>NSFT PO NO:</strong> ${escapeHtml(extractNsftPoNo(order.note)||'____________________')}</div><div><strong>Status:</strong> ${escapeHtml(order.status||'Pending')}</div><div><strong>BAKED CSS:</strong> ____________________</div><div><strong>Number of Packages:</strong> __________</div><div><strong>Complete Order:</strong> Yes ☐ &nbsp;&nbsp; No ☐</div><div><strong>Dispatch Date:</strong> __________</div></div>
   <table><thead><tr><th>Product / Strain</th><th>Order Qty</th><th>Packing Qty</th></tr></thead><tbody>${rows}</tbody></table>
-  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(order.note||'')}</div>
+  <div class="pieces-total"><span>TOTAL NUMBER OF PIECES</span><strong>${totalPieces}</strong></div>
+  <div class="notes"><strong>Order Notes:</strong><br>${escapeHtml(cleanOrderNote(order.note)||'')}</div>
   <div class="sign"><div class="line">Packed by / Signature</div><div class="line">Checked by / Signature</div></div>
   <button onclick="window.print()">Print Packing Slip</button>
   </body></html>`);
@@ -592,7 +923,70 @@ function openAdminAlerts(){
   $('#drawerBackdrop').classList.remove('hidden');
 }
 
-async function setOrderStatus(id,status){ try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:status})});toast('Order status updated');await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);}catch(err){toast(err.message);await loadOrders();} }
+async function adjustOrderInventoryForCancellation(order, direction=1){
+  // direction +1 returns stock on cancellation; -1 deducts it again if a cancellation is reversed.
+  const items=order?.order_items||[];
+  for(const item of items){
+    const qty=Math.max(0,Number(item.quantity||0));
+    if(!qty)continue;
+    const productId=item.product_id||item.product?.id;
+    if(!productId)throw new Error(`Could not identify product for ${item.product_name||'order item'}`);
+
+    const productRows=await api(`/rest/v1/products?select=*&id=eq.${encodeURIComponent(productId)}&limit=1`,{auth:true});
+    const product=productRows?.[0];
+    if(!product)throw new Error(`Product no longer exists: ${item.product_name||productId}`);
+
+    const strains=parseStrainList(product.description);
+    const displayedName=String(item.product_name||'');
+    const strainName=displayedName.includes(' — ')?displayedName.split(' — ').slice(1).join(' — ').trim():'';
+    const strainIndex=strainName?strains.findIndex(s=>s.name.toLowerCase()===strainName.toLowerCase()):-1;
+
+    if(strainIndex>=0){
+      const parts=splitProductDescription(product.description);
+      const updated=strains.map((strain,index)=>({
+        ...strain,
+        qty:index===strainIndex?Math.max(0,Number(strain.qty||0)+(direction*qty)):Number(strain.qty||0)
+      }));
+      const description=composeProductDescription(parts.description,updated.map(s=>`${s.name} = ${s.qty}`).join('\n'));
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(productId)}`,{
+        method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},
+        body:JSON.stringify({description,updated_at:new Date().toISOString()})
+      });
+    }else{
+      await api('/rest/v1/rpc/adjust_stock',{
+        method:'POST',auth:true,
+        body:JSON.stringify({
+          p_product_id:productId,
+          p_quantity:direction*qty,
+          p_reference:direction>0?`Cancelled order ${order.order_number||''} - stock returned`:`Reopened order ${order.order_number||''} - stock deducted again`
+        })
+      });
+    }
+  }
+}
+
+async function setOrderStatus(id,status){
+  const order=adminOrdersCache.find(o=>String(o.id)===String(id));
+  const previousStatus=String(order?.status||'Pending');
+  const nextStatus=String(status||previousStatus);
+  if(previousStatus===nextStatus)return;
+  try{
+    await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:nextStatus})});
+    try{
+      if(nextStatus==='Cancelled'&&previousStatus!=='Cancelled')await adjustOrderInventoryForCancellation(order,1);
+      if(previousStatus==='Cancelled'&&nextStatus!=='Cancelled')await adjustOrderInventoryForCancellation(order,-1);
+    }catch(stockErr){
+      // Keep status and stock in sync if restoration/deduction fails.
+      try{await api('/rest/v1/rpc/set_order_status',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id,p_status:previousStatus})});}catch{}
+      throw stockErr;
+    }
+    toast(nextStatus==='Cancelled'?'Order cancelled — stock returned':'Order status updated');
+    await Promise.all([loadOrders(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){
+    toast(err.message);
+    await loadOrders();
+  }
+}
 async function deleteOrder(id,number){
   if(!confirm(`Permanently delete order ${number}?\n\nThis cannot be undone and will not change current stock.`))return;
   try{await api('/rest/v1/rpc/delete_order_admin',{method:'POST',auth:true,body:JSON.stringify({p_order_id:id})});toast(`Order ${number} deleted`);await loadOrders();}catch(err){toast(err.message);}
@@ -676,62 +1070,101 @@ async function saveFastStock(){
 }
 
 let stockCsvChanges = [];
-let stockCsvNewProducts = [];
 
 function csvEscape(v){
   v=String(v??'');
-  return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
+  return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;
+}
+function csvParse(text){
+  text=String(text||'').replace(/^\uFEFF/,'').replace(/^sep=[,;]\s*\r?\n/i,'');
+  const first=(text.split(/\r?\n/)[0]||'');
+  const delim=(first.split(';').length>first.split(',').length)?';':',';
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){ if(q && text[i+1]==='"'){cell+='"';i++;} else q=!q; }
+    else if(c===delim&&!q){row.push(cell.trim());cell='';}
+    else if((c==='\n'||c==='\r')&&!q){
+      if(c==='\r'&&text[i+1]==='\n')i++;
+      row.push(cell.trim()); if(row.some(Boolean))rows.push(row); row=[];cell='';
+    } else cell+=c;
+  }
+  row.push(cell.trim()); if(row.some(Boolean))rows.push(row); return rows;
+}
+function csvStrainType(name){
+  const m=String(name||'').match(/\(([SIH])\)\s*$/i);
+  return m?m[1].toUpperCase():'';
+}
+function csvStrainBase(name){
+  return String(name||'').replace(/\s*\(([SIH])\)\s*$/i,'').trim();
 }
 async function downloadStockCsvTemplate(){
   try{
-    const rows=await api('/rest/v1/products?select=sku,name,category,group_name,strength,price,stock,reorder_level,description,active,featured&order=group_name.asc,name.asc',{auth:true});
-    const data=[['SKU','Product Name','Category','Range','Strength','Price','New Stock Quantity','Reorder Level','Description','Active','Featured'],
-      ...rows.map(p=>[p.sku||'',p.name||'',p.category||'',p.group_name||'',p.strength||'',Number(p.price||0),Number(p.stock||0),Number(p.reorder_level||0),p.description||'',p.active!==false,p.featured===true])];
-    const csv=data.map(r=>r.map(csvEscape).join(',')).join('\r\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='BAKED-PRODUCT-STOCK-UPLOAD.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    const ps=await api('/rest/v1/products?select=id,name,description&order=name.asc',{auth:true});
+    const rows=[['Product - Strain','Type','Stock Qty']];
+    ps.forEach(p=>parseStrainList(p.description).forEach(s=>{
+      rows.push([`${p.name} - ${csvStrainBase(s.name)}`,csvStrainType(s.name),Number(s.qty||0)]);
+    }));
+    const body=rows.map(r=>r.map(csvEscape).join(';')).join('\r\n');
+    const blob=new Blob(['\uFEFFsep=;\r\n'+body],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='BAKED-MASTER-STRAIN-STOCK.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   }catch(err){toast(err.message);}
 }
-function parseCsv(text){
-  const rows=[];let row=[],cell='',quoted=false;
-  for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(ch===','&&!quoted){row.push(cell.trim());cell='';}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);row=[];cell='';}else cell+=ch;}
-  row.push(cell.trim());if(row.some(x=>x!==''))rows.push(row);return rows;
-}
-function csvBool(v,def=false){v=String(v??'').trim().toLowerCase();if(!v)return def;return ['true','yes','1','y'].includes(v);}
 async function previewStockCsv(){
-  const file=$('#stockCsvFile')?.files?.[0];if(!file){toast('Choose a CSV file first');return;}
-  const msg=$('#stockCsvMessage'),box=$('#stockCsvPreview'),btn=$('#applyStockCsvButton');msg.textContent='Checking CSV…';box.innerHTML='';btn.disabled=true;stockCsvChanges=[];stockCsvNewProducts=[];
+  const file=$('#stockCsvFile')?.files?.[0];
+  if(!file){toast('Choose a CSV file first');return;}
+  const msg=$('#stockCsvMessage'), box=$('#stockCsvPreview'), btn=$('#applyStockCsvButton');
+  msg.textContent='Checking CSV…'; box.innerHTML=''; btn.disabled=true; stockCsvChanges=[];
   try{
-    const rows=parseCsv(await file.text());if(rows.length<2)throw new Error('CSV has no product rows.');
-    const h=rows[0].map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,''));
-    const ix=(...names)=>h.findIndex(x=>names.includes(x));
-    const skuI=ix('sku'),nameI=ix('productname','product','name'),catI=ix('category'),rangeI=ix('range','group','groupname'),strengthI=ix('strength'),priceI=ix('price'),stockI=ix('newstockquantity','stock','quantity','qty'),reorderI=ix('reorderlevel','reorder'),descI=ix('description'),activeI=ix('active'),featuredI=ix('featured');
-    if(skuI<0||nameI<0||stockI<0)throw new Error('CSV needs SKU, Product Name and New Stock Quantity columns.');
-    const products=await api('/rest/v1/products?select=*&order=name.asc',{auth:true});
-    const bySku=new Map(products.filter(p=>p.sku).map(p=>[String(p.sku).trim().toLowerCase(),p]));const preview=[];
+    const rows=csvParse(await file.text());
+    if(rows.length<2) throw new Error('CSV has no stock rows.');
+    const heads=rows[0].map(v=>v.toLowerCase().replace(/[^a-z0-9]/g,''));
+    const ni=heads.indexOf('productstrain'), ti=heads.indexOf('type'), qi=heads.indexOf('stockqty');
+    if(ni<0||ti<0||qi<0) throw new Error('Use exactly: Product - Strain, Type, Stock Qty.');
+    const ps=await api('/rest/v1/products?select=id,name,description&order=name.asc',{auth:true});
+    const sorted=[...ps].sort((a,b)=>b.name.length-a.name.length), staged=new Map(), preview=[];
     for(const r of rows.slice(1)){
-      const sku=String(r[skuI]||'').trim(),name=String(r[nameI]||'').trim(),raw=String(r[stockI]||'').trim();if(!sku&&!name&&!raw)continue;
-      const target=Number(raw);if(!sku||!name||!Number.isInteger(target)||target<0){preview.push({sku,name,current:'—',target:raw,status:'Invalid row'});continue;}
-      const p=bySku.get(sku.toLowerCase());
-      if(p){const diff=target-Number(p.stock||0);preview.push({sku,name:p.name,current:Number(p.stock||0),target,status:diff===0?'No change':'Update stock'});if(diff!==0)stockCsvChanges.push({id:p.id,sku,name:p.name,diff});}
-      else{
-        const price=priceI>=0?Number(r[priceI]||0):0;if(!Number.isFinite(price)||price<0){preview.push({sku,name,current:'NEW',target,status:'Invalid price'});continue;}
-        const payload={sku,name,category:catI>=0?String(r[catI]||'').trim():'',group_name:rangeI>=0?String(r[rangeI]||'').trim():'',strength:strengthI>=0?String(r[strengthI]||'').trim():'',price,stock:target,reorder_level:reorderI>=0?Number(r[reorderI]||0):0,description:descI>=0?String(r[descI]||'').trim():'',image_url:null,active:activeI>=0?csvBool(r[activeI],true):true,featured:featuredI>=0?csvBool(r[featuredI],false):false,updated_at:new Date().toISOString()};
-        stockCsvNewProducts.push(payload);preview.push({sku,name,current:'NEW',target,status:'Create product'});
-      }
+      const combined=String(r[ni]||'').trim(), type=String(r[ti]||'').trim().toUpperCase(), qty=Number(r[qi]);
+      if(!combined && !r[ti] && !r[qi]) continue;
+      if(!['S','I','H'].includes(type)||!Number.isInteger(qty)||qty<0){preview.push([combined,type,r[qi],'Invalid']);continue;}
+      const p=sorted.find(x=>combined.toLowerCase().startsWith(x.name.trim().toLowerCase()+' - '));
+      if(!p){preview.push([combined,type,qty,'Product not found']);continue;}
+      const strain=combined.slice(p.name.trim().length+3).trim();
+      if(!strain){preview.push([combined,type,qty,'Missing strain']);continue;}
+      if(!staged.has(String(p.id))) staged.set(String(p.id),{p,strains:parseStrainList(p.description)});
+      const e=staged.get(String(p.id)), i=e.strains.findIndex(s=>csvStrainBase(s.name).toLowerCase()===strain.toLowerCase());
+      if(i>=0){e.strains[i].name=`${strain} (${type})`;e.strains[i].qty=qty;preview.push([`${p.name} - ${strain}`,type,qty,'Replace']);}
+      else {e.strains.push({name:`${strain} (${type})`,qty});preview.push([`${p.name} - ${strain}`,type,qty,'New strain']);}
     }
-    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>SKU</span><span>Product</span><span>Current</span><span>New</span><span>Action</span></div>${preview.map(x=>`<div class="csv-line"><span>${escapeHtml(x.sku)}</span><span>${escapeHtml(x.name)}</span><span>${escapeHtml(x.current)}</span><span>${escapeHtml(x.target)}</span><span>${escapeHtml(x.status)}</span></div>`).join('')}</div>`:'<div class="empty-state"><p>No rows found.</p></div>';
-    const total=stockCsvChanges.length+stockCsvNewProducts.length;msg.textContent=total?`${stockCsvChanges.length} stock update${stockCsvChanges.length===1?'':'s'} and ${stockCsvNewProducts.length} new product${stockCsvNewProducts.length===1?'':'s'} ready.`:'No changes or new products found.';btn.disabled=!total;
-  }catch(err){msg.textContent=err.message;box.innerHTML='';btn.disabled=true;}
+    stockCsvChanges=[...staged.values()];
+    box.innerHTML=preview.length?`<div class="csv-table"><div class="csv-head"><span>Product - Strain</span><span>Type</span><span>Stock Qty</span><span>Action</span></div>${preview.map(r=>`<div class="csv-line"><span>${escapeHtml(r[0])}</span><span>${escapeHtml(r[1])}</span><span>${escapeHtml(r[2])}</span><span>${escapeHtml(r[3])}</span></div>`).join('')}</div>`:'';
+    const bad=preview.filter(r=>r[3]==='Invalid'||r[3]==='Product not found'||r[3]==='Missing strain').length;
+    msg.textContent=bad?`${bad} row(s) need attention. Valid rows are ready.`:`${preview.length} strain row(s) ready.`;
+    btn.disabled=!stockCsvChanges.length;
+  }catch(err){msg.textContent=err.message;box.innerHTML='';}
 }
 async function applyStockCsv(){
-  const total=stockCsvChanges.length+stockCsvNewProducts.length;if(!total)return;const btn=$('#applyStockCsvButton'),msg=$('#stockCsvMessage');btn.disabled=true;msg.textContent=`Processing ${total} item${total===1?'':'s'}…`;let updated=0,created=0;
+  if(!stockCsvChanges.length)return;
+  const btn=$('#applyStockCsvButton'), msg=$('#stockCsvMessage'); btn.disabled=true;
   try{
-    for(const c of stockCsvChanges){await api('/rest/v1/rpc/adjust_stock',{method:'POST',auth:true,body:JSON.stringify({p_product_id:c.id,p_quantity:c.diff,p_reference:'CSV Stock Upload'})});updated++;}
-    for(const p of stockCsvNewProducts){await api('/rest/v1/products',{method:'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});created++;}
-    toast(`${updated} updated · ${created} new products added`);msg.textContent=`Done: ${updated} stock updated and ${created} new product${created===1?'':'s'} created.`;stockCsvChanges=[];stockCsvNewProducts=[];$('#stockCsvPreview').innerHTML='';$('#stockCsvFile').value='';await Promise.all([loadAdminProducts(),loadInventory(),loadProducts()]);
-  }catch(err){msg.textContent=`Completed ${updated} updates and ${created} new products before an error: ${err.message}`;toast('CSV import stopped because of an error');}
-  finally{btn.disabled=!(stockCsvChanges.length+stockCsvNewProducts.length);}
+    for(const {p,strains} of stockCsvChanges){
+      const normal=splitProductDescription(p.description).description;
+      const strainText=strains.map(s=>`${s.name} = ${Number(s.qty||0)}`).join('\n');
+      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{
+        method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},
+        body:JSON.stringify({description:composeProductDescription(normal,strainText),updated_at:new Date().toISOString()})
+      });
+    }
+    msg.textContent='Master strain stock updated. Stock Qty replaced the existing quantities.';
+    toast('CSV stock updated'); stockCsvChanges=[]; box=$('#stockCsvPreview'); if(box)box.innerHTML='';
+    if($('#stockCsvFile'))$('#stockCsvFile').value='';
+    await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+  }catch(err){msg.textContent=err.message;toast(err.message);}
+  finally{btn.disabled=!stockCsvChanges.length;}
 }
 
 async function loadInventory(){
@@ -740,15 +1173,14 @@ async function loadInventory(){
 
 function timeToMinutes(value='00:00'){const [h,m]=String(value).slice(0,5).split(':').map(Number);return (h||0)*60+(m||0)}
 function orderingAllowed(){
-  if(!siteSettings.store_open)return false;
-  if(!siteSettings.auto_hours)return true;
-  const now=new Date(), current=now.getHours()*60+now.getMinutes(), open=timeToMinutes(siteSettings.opening_time), close=timeToMinutes(siteSettings.closing_time);
-  return open<=close ? current>=open&&current<close : current>=open||current<close;
+  // Live menu is permanently open 24 hours a day.
+  return true;
 }
 async function loadSiteSettings(forAdmin=false){
   try{const rows=await api('/rest/v1/site_settings?select=*&id=eq.1');if(rows?.[0])siteSettings=rows[0];}catch(e){console.warn('Settings unavailable',e)}
   applySiteSettings();
-  if(forAdmin){$('#settingStoreOpen').checked=!!siteSettings.store_open;$('#settingAutoHours').checked=!!siteSettings.auto_hours;$('#settingOpeningTime').value=String(siteSettings.opening_time||'09:00').slice(0,5);$('#settingClosingTime').value=String(siteSettings.closing_time||'18:00').slice(0,5);$('#settingBannerText').value=siteSettings.banner_text||'';}
+  siteSettings={...siteSettings,store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59'};
+  if(forAdmin){$('#settingStoreOpen').checked=true;$('#settingAutoHours').checked=false;$('#settingOpeningTime').value='00:00';$('#settingClosingTime').value='23:59';$('#settingBannerText').value=siteSettings.banner_text||'';}
 }
 function applySiteSettings(){
   const banner=$('#storeBanner'), closed=$('#storeClosedNotice');
@@ -757,7 +1189,7 @@ function applySiteSettings(){
   const place=$('#placeOrderButton');if(place){place.disabled=!orderingAllowed();place.textContent=orderingAllowed()?'Place order':'Store closed';}
 }
 async function saveSiteSettings(e){
-  e.preventDefault(); const payload={store_open:$('#settingStoreOpen').checked,auto_hours:$('#settingAutoHours').checked,opening_time:$('#settingOpeningTime').value||'09:00',closing_time:$('#settingClosingTime').value||'18:00',banner_text:$('#settingBannerText').value.trim(),updated_at:new Date().toISOString()};
+  e.preventDefault(); const payload={store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59',banner_text:$('#settingBannerText').value.trim(),updated_at:new Date().toISOString()};
   $('#settingsStatus').textContent='Saving…';
   try{await api('/rest/v1/site_settings?id=eq.1',{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});siteSettings={...siteSettings,...payload};applySiteSettings();renderProducts();renderFeaturedProducts();$('#settingsStatus').textContent='Saved';toast('Store settings saved')}catch(err){$('#settingsStatus').textContent=err.message}
 }
@@ -901,84 +1333,64 @@ function exportSalesCsv(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-sales-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
 
-function luhnValidSouthAfricanId(idNumber){
-  if(!/^\d{13}$/.test(idNumber)) return false;
-  let oddSum=0;
-  for(let i=0;i<12;i+=2) oddSum+=Number(idNumber[i]);
-  const evenNumber=Number(idNumber.slice(1,12).split('').filter((_,i)=>i%2===0).join(''))*2;
-  const evenSum=String(evenNumber).split('').reduce((sum,d)=>sum+Number(d),0);
-  const check=(10-((oddSum+evenSum)%10))%10;
-  return check===Number(idNumber[12]);
+async function submitMenuSuggestion(e){
+  e.preventDefault();
+  const name=$('#suggestionName')?.value.trim()||'';
+  const suggestion=$('#suggestionText')?.value.trim()||'';
+  const message=$('#suggestionMessage');
+  const button=$('#suggestionSubmitButton');
+  if(!suggestion){if(message)message.textContent='Please enter your suggestion.';return;}
+  if(message)message.textContent='Sending suggestion…';
+  if(button)button.disabled=true;
+  try{
+    await api('/rest/v1/menu_suggestions',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({customer_name:name||null,suggestion,status:'New'})});
+    if($('#suggestionForm'))$('#suggestionForm').reset();
+    if(message)message.textContent='Thank you — your suggestion was sent to Baked Admin.';
+    toast('Suggestion sent');
+  }catch(err){
+    if(message)message.textContent=err.message||'Could not send suggestion.';
+  }finally{if(button)button.disabled=false;}
 }
-function birthDateFromSouthAfricanId(idNumber){
-  const yy=Number(idNumber.slice(0,2));
-  const mm=Number(idNumber.slice(2,4));
-  const dd=Number(idNumber.slice(4,6));
-  const today=new Date();
-  const currentYY=today.getFullYear()%100;
-  const year=yy<=currentYY?2000+yy:1900+yy;
-  const birthDate=new Date(year,mm-1,dd);
-  if(birthDate.getFullYear()!==year||birthDate.getMonth()!==mm-1||birthDate.getDate()!==dd||birthDate>today) return null;
-  return birthDate;
+async function loadAdminSuggestions(){
+  const list=$('#adminSuggestions');
+  if(!list)return;
+  list.innerHTML='<div class="empty-state"><p>Loading suggestions…</p></div>';
+  try{
+    const rows=await api('/rest/v1/menu_suggestions?select=*&order=created_at.desc',{auth:true});
+    list.innerHTML=rows.length?rows.map(r=>`<article class="order-card"><div class="order-top"><div><strong>${escapeHtml(r.customer_name||'Anonymous customer')}</strong><small>${new Date(r.created_at).toLocaleString('en-ZA')}</small></div><select class="suggestion-status" data-id="${r.id}">${['New','Reviewed','Done'].map(s=>`<option ${String(r.status||'New')===s?'selected':''}>${s}</option>`).join('')}</select></div><p class="order-note">${escapeHtml(r.suggestion)}</p><div class="admin-row-data"><button class="btn danger compact delete-suggestion" type="button" data-id="${r.id}">Delete</button></div></article>`).join(''):'<div class="empty-state"><h3>No suggestions yet</h3><p>Customer suggestions will appear here.</p></div>';
+    $$('.suggestion-status').forEach(s=>s.onchange=()=>updateSuggestionStatus(s.dataset.id,s.value));
+    $$('.delete-suggestion').forEach(b=>b.onclick=()=>deleteSuggestion(b.dataset.id));
+  }catch(err){list.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
-function ageOnDate(birthDate,today=new Date()){
-  let age=today.getFullYear()-birthDate.getFullYear();
-  const beforeBirthday=today.getMonth()<birthDate.getMonth()||(today.getMonth()===birthDate.getMonth()&&today.getDate()<birthDate.getDate());
-  if(beforeBirthday) age--;
-  return age;
+async function updateSuggestionStatus(id,status){
+  try{
+    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({status})});
+    toast('Suggestion updated');
+  }catch(err){toast(err.message);await loadAdminSuggestions();}
 }
-function verifyCustomerAge(event){
-  event.preventDefault();
-  const input=$('#customerIdNumber');
-  const message=$('#ageCheckMessage');
-  const idNumber=input.value.replace(/\s+/g,'');
-  input.value=idNumber;
-  message.textContent='';
-  if(!/^\d{13}$/.test(idNumber)){
-    message.textContent='Please enter a valid 13-digit South African ID number.';
-    input.focus();
-    return;
-  }
-  const birthDate=birthDateFromSouthAfricanId(idNumber);
-  if(!birthDate||!luhnValidSouthAfricanId(idNumber)){
-    message.textContent='This ID number is not valid. Please check it and try again.';
-    input.focus();
-    return;
-  }
-  if(ageOnDate(birthDate)<18){
-    message.textContent='Access denied. You must be 18 or older to enter this site.';
-    input.value='';
-    input.focus();
-    return;
-  }
-  localStorage.setItem('baked-age-verified-until', String(Date.now() + 30*24*60*60*1000));
-  input.value='';
-  $('#ageGate').classList.add('hidden');
+async function deleteSuggestion(id){
+  if(!confirm('Delete this suggestion?'))return;
+  try{
+    await api(`/rest/v1/menu_suggestions?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',auth:true,headers:{Prefer:'return=minimal'}});
+    toast('Suggestion deleted');
+    await loadAdminSuggestions();
+  }catch(err){toast(err.message);}
 }
+
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); if(tab==='suggestions')loadAdminSuggestions(); }
+
 $('#productImageFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;$('#productFormMessage').textContent='Preparing photo…';try{$('#productImage').value=await compressImage(file);$('#productFormMessage').textContent='Photo ready'}catch{$('#productFormMessage').textContent='Could not process photo'}});
 $('#settingsForm').addEventListener('submit',saveSiteSettings);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
 $('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
-// Simple 18+ entry gate used by the current index.html.
-const confirmAgeButton=$('#confirmAgeButton');
-if(confirmAgeButton){
-  confirmAgeButton.onclick=()=>{
-    localStorage.setItem('baked-age-verified-until', String(Date.now() + 30*24*60*60*1000));
-    $('#ageGate')?.classList.add('hidden');
-  };
-}
 {
-  const verifiedUntil=Number(localStorage.getItem('baked-age-verified-until')||0);
-  if(verifiedUntil>Date.now()){
-    $('#ageGate')?.classList.add('hidden');
-  }else{
-    localStorage.removeItem('baked-age-verified-until');
-  }
 }
 $('#cartButton').onclick=openDrawer; $('#drawerBackdrop').onclick=closeOverlays; $$('[data-close]').forEach(b=>b.onclick=closeOverlays);
 $('#checkoutForm').onsubmit=placeOrder; 
+if($('#suggestionForm'))$('#suggestionForm').onsubmit=submitMenuSuggestion;
+if($('#refreshSuggestionsButton'))$('#refreshSuggestionsButton').onclick=loadAdminSuggestions;
+
 
 /* ===== SURPRISE ME ===== */
 function openSurpriseMe(){
@@ -1011,6 +1423,7 @@ function runSurpriseMe(){
 }
 
 $('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
+$('#masterStrainSearch')&&($('#masterStrainSearch').oninput=renderMasterStrains); $('#addMasterStrainButton')&&($('#addMasterStrainButton').onclick=addMasterStrain); $('#addSavedStrainToProduct')&&($('#addSavedStrainToProduct').onclick=addSelectedMasterStrainToProduct);
 $('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
 if($('#refreshSalesButton'))$('#refreshSalesButton').onclick=loadSales;
@@ -1035,7 +1448,7 @@ if($('#surpriseButton')) $('#surpriseButton').onclick=openSurpriseMe;
 if($('#surpriseClose')) $('#surpriseClose').onclick=closeSurpriseMe;
 if($('#surpriseGo')) $('#surpriseGo').onclick=runSurpriseMe;
 if($('#surpriseModal')) $('#surpriseModal').onclick=e=>{if(e.target===$('#surpriseModal'))closeSurpriseMe();};
-loadSiteSettings().then(loadProducts);
+loadSiteSettings().then(loadProducts).then(()=>{renderMasterStrains();refreshProductSavedStrainSelect();});
 // Robust strain popup closing
 document.addEventListener('click',e=>{
   if(e.target.closest('#strainModal [data-close]')){e.preventDefault();e.stopPropagation();closeStrainModal();return;}
@@ -1087,3 +1500,123 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js').catch(console.error);
   });
 }
+
+/* BAKED Live Menu — product image enlarge / lightbox fix */
+(function(){
+  let imageLightbox=null;
+
+  function ensureImageLightbox(){
+    if(imageLightbox) return imageLightbox;
+
+    const style=document.createElement('style');
+    style.id='baked-image-lightbox-styles';
+    style.textContent=`
+      .baked-image-lightbox{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:24px;opacity:1;transition:opacity .18s ease}
+      .baked-image-lightbox.hidden{display:none}
+      .baked-image-lightbox img{display:block;max-width:min(94vw,1200px);max-height:90vh;width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,.55);background:#fff}
+      .baked-image-lightbox-close{position:fixed;top:18px;right:18px;width:46px;height:46px;border:0;border-radius:999px;background:rgba(255,255,255,.96);color:#111;font-size:31px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:100000}
+      .product-image img,.featured-card .product-image img{cursor:zoom-in}
+      @media(max-width:640px){.baked-image-lightbox{padding:14px}.baked-image-lightbox img{max-width:96vw;max-height:86vh;border-radius:10px}.baked-image-lightbox-close{top:12px;right:12px;width:42px;height:42px}}
+    `;
+    document.head.appendChild(style);
+
+    imageLightbox=document.createElement('div');
+    imageLightbox.id='bakedImageLightbox';
+    imageLightbox.className='baked-image-lightbox hidden';
+    imageLightbox.setAttribute('role','dialog');
+    imageLightbox.setAttribute('aria-modal','true');
+    imageLightbox.setAttribute('aria-label','Product image preview');
+    imageLightbox.innerHTML='<button class="baked-image-lightbox-close" type="button" aria-label="Close image">×</button><img alt="Product image">';
+    document.body.appendChild(imageLightbox);
+
+    imageLightbox.querySelector('.baked-image-lightbox-close').addEventListener('click',closeProductImage);
+    imageLightbox.addEventListener('click',e=>{ if(e.target===imageLightbox) closeProductImage(); });
+    return imageLightbox;
+  }
+
+  function openProductImage(src,alt){
+    if(!src) return;
+    const box=ensureImageLightbox();
+    const img=box.querySelector('img');
+    img.src=src;
+    img.alt=alt||'Product image';
+    box.classList.remove('hidden');
+    document.body.style.overflow='hidden';
+  }
+
+  function closeProductImage(){
+    const box=imageLightbox||document.getElementById('bakedImageLightbox');
+    if(!box) return;
+    box.classList.add('hidden');
+    const img=box.querySelector('img');
+    if(img) img.removeAttribute('src');
+    document.body.style.overflow='';
+  }
+
+  // Capture the image click before product-card strain click handlers can take over.
+  document.addEventListener('click',e=>{
+    const img=e.target.closest('.product-card .product-image img');
+    if(!img) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openProductImage(img.currentSrc||img.src,img.alt);
+  },true);
+
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape' && imageLightbox && !imageLightbox.classList.contains('hidden')){
+      e.preventDefault();
+      closeProductImage();
+    }
+  });
+
+  window.openProductImage=openProductImage;
+  window.closeProductImage=closeProductImage;
+})();
+
+// Saved strain manager
+document.addEventListener('click',e=>{if(e.target?.id==='addProductStrainRow'){e.preventDefault();addProductStrainRow({name:'',qty:0});const rows=$$('#productStrainRows .product-strain-name');rows[rows.length-1]?.focus();}});
+
+
+// Order editing controls
+window.addEventListener('DOMContentLoaded',()=>{
+  const editBtn=document.getElementById('editOrderButton');
+  if(editBtn)editBtn.onclick=()=>selectedOrderDetail&&openEditOrder(selectedOrderDetail.id);
+  const saveBtn=document.getElementById('saveOrderEditsButton');
+  if(saveBtn)saveBtn.onclick=saveOrderEdits;
+});
+
+// Customer self-service order editing (Pending orders only)
+let customerEditingOrder=null;
+function makeCustomerEditToken(){
+  const a=new Uint8Array(24); crypto.getRandomValues(a); return [...a].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function enableCustomerOrderEditing(orderNo){
+  const token=makeCustomerEditToken();
+  const ok=await api('/rest/v1/rpc/set_customer_order_edit_token',{method:'POST',body:JSON.stringify({p_order_number:orderNo,p_token:token})});
+  if(ok){localStorage.setItem(`baked-order-edit-${orderNo}`,token);localStorage.setItem('baked-last-editable-order',orderNo);return token;}
+  return null;
+}
+async function openCustomerOrderEditor(orderNo,token){
+  try{
+    const order=await api('/rest/v1/rpc/get_customer_pending_order',{method:'POST',body:JSON.stringify({p_order_number:orderNo,p_token:token})});
+    customerEditingOrder={...order,token};
+    $('#customerEditOrderTitle').textContent=`Change ${order.order_number}`;
+    $('#customerEditOrderItems').innerHTML=(order.items||[]).map(i=>`<div class="admin-row customer-edit-order-item" data-item-id="${i.id}" style="gap:12px;align-items:center"><div class="admin-row-main"><div><strong>${escapeHtml(i.product_name)}</strong><small>${money(i.unit_price)} each</small></div></div><div class="admin-row-data"><label style="display:flex;align-items:center;gap:7px">Qty <input class="customer-edit-order-qty" data-item-id="${i.id}" type="number" min="0" step="1" value="${Number(i.quantity||0)}" style="width:82px"></label><button class="btn danger compact customer-remove-order-item" data-item-id="${i.id}" type="button">Remove</button></div></div>`).join('');
+    $$('.customer-remove-order-item').forEach(b=>b.onclick=()=>{const input=$(`.customer-edit-order-qty[data-item-id="${b.dataset.itemId}"]`);if(input)input.value='0';b.closest('.customer-edit-order-item')?.classList.add('pending-remove');});
+    $('#customerEditOrderMessage').textContent='';
+    $('#customerEditOrderModal').classList.remove('hidden');$('#customerEditOrderModal').setAttribute('aria-hidden','false');
+  }catch(err){toast(err.message);}
+}
+async function saveCustomerOrderEdits(){
+  if(!customerEditingOrder)return;
+  const btn=$('#saveCustomerOrderEditsButton'),msg=$('#customerEditOrderMessage');
+  const items=(customerEditingOrder.items||[]).map(i=>({id:i.id,quantity:Math.max(0,Math.floor(Number($(`.customer-edit-order-qty[data-item-id="${i.id}"]`)?.value||0)))}));
+  if(!items.some(i=>i.quantity>0)){msg.textContent='Keep at least one item in the order.';return;}
+  btn.disabled=true;msg.textContent='Updating order…';
+  try{
+    const updated=await api('/rest/v1/rpc/update_customer_pending_order',{method:'POST',body:JSON.stringify({p_order_number:customerEditingOrder.order_number,p_token:customerEditingOrder.token,p_items:items})});
+    customerEditingOrder={...updated,token:customerEditingOrder.token};msg.textContent='Order updated successfully. Stock has been adjusted.';toast(`${updated.order_number} updated`);await loadProducts();setTimeout(()=>closeModal('customerEditOrderModal'),650);
+  }catch(err){msg.textContent=err.message;}
+  btn.disabled=false;
+}
+window.addEventListener('DOMContentLoaded',()=>{const b=$('#saveCustomerOrderEditsButton');if(b)b.onclick=saveCustomerOrderEdits;});
