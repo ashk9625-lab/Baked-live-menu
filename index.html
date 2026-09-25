@@ -163,6 +163,13 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
+          <div class="fast-stock-card customer-stock-admin">
+            <div class="admin-toolbar"><div><h3>Customer Stock</h3><p class="admin-help">Choose which customer menu you are stocking. Customer and NSFT quantities are completely separate.</p></div><select id="customerStockAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></div>
+            <div class="fast-stock-search"><input id="customerStockSearch" type="search" placeholder="Search products…"></div>
+            <div id="customerStockList" class="fast-stock-list"></div>
+            <div class="fast-stock-footer"><span id="customerStockMessage" class="form-message"></span><button id="saveCustomerStockButton" class="btn primary" type="button">SAVE CUSTOMER STOCK</button></div>
+          </div>
+          <div class="inventory-divider"></div>
           <div class="fast-stock-card">
   <div class="admin-toolbar">
     <div><h3>Fast Stock</h3><p class="admin-help">Update all strain quantities without opening each product.</p></div>
