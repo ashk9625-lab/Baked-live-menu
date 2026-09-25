@@ -13,8 +13,11 @@ const FALLBACK_PRODUCTS = [
 
 
 // Customer / NSFT menu access
-let customerSessionToken=localStorage.getItem('baked-customer-session')||'';
-let customerAccountName=localStorage.getItem('baked-customer-name')||'';
+// Customer access is intentionally session-only: every fresh visit/reload asks which account to use.
+let customerSessionToken='';
+let customerAccountName='';
+localStorage.removeItem('baked-customer-session');
+localStorage.removeItem('baked-customer-name');
 function showCustomerGate(){
   let gate=document.getElementById('customerAccessGate');
   if(!gate){
@@ -32,7 +35,6 @@ async function customerAccessLogin(e){
     const rows=await api('/rest/v1/rpc/customer_login',{method:'POST',body:JSON.stringify({p_code:document.getElementById('customerAccessCode').value,p_password:document.getElementById('customerAccessPassword').value})});
     const row=Array.isArray(rows)?rows[0]:rows;if(!row?.session_token)throw new Error('Login failed');
     customerSessionToken=row.session_token;customerAccountName=row.customer_name||'';
-    localStorage.setItem('baked-customer-session',customerSessionToken);localStorage.setItem('baked-customer-name',customerAccountName);
     cart=[];persistCart();hideCustomerGate();await loadProducts();toast(customerAccountName+' menu loaded');
   }catch(err){msg.textContent='Incorrect account or password.';}
 }
