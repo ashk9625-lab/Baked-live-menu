@@ -155,7 +155,7 @@
         </section>
 
         <section id="ordersTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar"><h3>Customer Orders</h3><button id="refreshOrdersButton" class="btn ghost">Refresh</button></div>
+          <div class="admin-toolbar"><div><h3>Customer Orders</h3><p class="admin-help">View orders separately by account.</p></div><div class="order-account-controls"><select id="orderAccountFilter"><option value="CUSTOMER">Customer Orders</option><option value="NSFT">NSFT Orders</option></select><button id="refreshOrdersButton" class="btn ghost">Refresh</button></div></div>
           <div class="order-cleanup-toolbar">
             <select id="oldOrderDays"><option value="30">Older than 30 days</option><option value="60">Older than 60 days</option><option value="90">Older than 90 days</option></select>
             <button id="deleteOldOrdersButton" class="btn danger" type="button">Delete old completed orders</button>
