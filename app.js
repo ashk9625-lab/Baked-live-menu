@@ -11,6 +11,36 @@ const FALLBACK_PRODUCTS = [
   {id:'demo-6',sku:'VAP-DISP',name:'Baked Disposable Vape',group_name:'Vapes',category:'Disposable Vapes',strength:'1ml',price:350,stock:0,reorder_level:4,description:'Distillate disposable vape.',image_url:null,active:true}
 ];
 
+
+// Customer / NSFT menu access
+let customerSessionToken=localStorage.getItem('baked-customer-session')||'';
+let customerAccountName=localStorage.getItem('baked-customer-name')||'';
+function showCustomerGate(){
+  let gate=document.getElementById('customerAccessGate');
+  if(!gate){
+    gate=document.createElement('div');gate.id='customerAccessGate';gate.className='customer-access-gate';
+    gate.innerHTML='<div class="customer-access-card"><img src="baked-logo.png" alt="BAKED"><p class="eyebrow accent">LIVE MENU ACCESS</p><h2>Customer Login</h2><p>Select your account and enter your password.</p><form id="customerAccessForm" class="form-stack"><label>Account<select id="customerAccessCode"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></label><label>Password<input id="customerAccessPassword" type="password" required autocomplete="current-password"></label><button class="btn primary wide" type="submit">Enter Live Menu</button><p id="customerAccessMessage" class="form-message"></p></form></div>';
+    document.body.appendChild(gate);
+    document.getElementById('customerAccessForm').onsubmit=customerAccessLogin;
+  }
+  gate.classList.remove('hidden');document.body.classList.add('customer-locked');
+}
+function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');}
+async function customerAccessLogin(e){
+  e.preventDefault();const msg=document.getElementById('customerAccessMessage');msg.textContent='Signing in…';
+  try{
+    const rows=await api('/rest/v1/rpc/customer_login',{method:'POST',body:JSON.stringify({p_code:document.getElementById('customerAccessCode').value,p_password:document.getElementById('customerAccessPassword').value})});
+    const row=Array.isArray(rows)?rows[0]:rows;if(!row?.session_token)throw new Error('Login failed');
+    customerSessionToken=row.session_token;customerAccountName=row.customer_name||'';
+    localStorage.setItem('baked-customer-session',customerSessionToken);localStorage.setItem('baked-customer-name',customerAccountName);
+    cart=[];persistCart();hideCustomerGate();await loadProducts();toast(customerAccountName+' menu loaded');
+  }catch(err){msg.textContent='Incorrect account or password.';}
+}
+async function customerAccessLogout(){
+  try{if(customerSessionToken)await api('/rest/v1/rpc/customer_logout',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});}catch{}
+  customerSessionToken='';customerAccountName='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();showCustomerGate();
+}
+
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
 let activeVaultFilter='all';
 let siteSettings={store_open:true,auto_hours:false,opening_time:'00:00',closing_time:'23:59',banner_text:''};
@@ -393,8 +423,10 @@ function renderProducts(){
 }
 async function loadProducts(){
   try{
-    const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc');
-    products=data;
+    if(!customerSessionToken){products=[];showCustomerGate();return;}
+    const data=await api('/rest/v1/rpc/customer_menu',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});
+    products=Array.isArray(data)?data:[];
+    hideCustomerGate();
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
   updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
@@ -560,9 +592,10 @@ async function placeOrder(e){
   try{
     if(cart.some(i=>String(i.id).startsWith('demo-'))) throw new Error('The live database has no products yet. Add products in Admin before accepting orders.');
 
-    const orderNo=await api('/rest/v1/rpc/place_order',{
+    const orderNo=await api('/rest/v1/rpc/place_customer_order',{
       method:'POST',
       body:JSON.stringify({
+        p_session_token:customerSessionToken,
         p_customer_name:customerName,
         p_customer_phone:customerPhone,
         p_note:note,
