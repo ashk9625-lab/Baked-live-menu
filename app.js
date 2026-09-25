@@ -961,13 +961,18 @@ $('#productImageFile').addEventListener('change',async e=>{const file=e.target.f
 $('#settingsForm').addEventListener('submit',saveSiteSettings);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
 $('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
-$('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
-$('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,13)});
-$('#leaveSite').onclick=()=>location.href='https://www.google.com';
+// Simple 18+ entry gate used by the current index.html.
+const confirmAgeButton=$('#confirmAgeButton');
+if(confirmAgeButton){
+  confirmAgeButton.onclick=()=>{
+    localStorage.setItem('baked-age-verified-until', String(Date.now() + 30*24*60*60*1000));
+    $('#ageGate')?.classList.add('hidden');
+  };
+}
 {
   const verifiedUntil=Number(localStorage.getItem('baked-age-verified-until')||0);
   if(verifiedUntil>Date.now()){
-    $('#ageGate').classList.add('hidden');
+    $('#ageGate')?.classList.add('hidden');
   }else{
     localStorage.removeItem('baked-age-verified-until');
   }
