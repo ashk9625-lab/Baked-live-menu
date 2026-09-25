@@ -652,7 +652,7 @@ async function signupStaff(e){
 async function verifyAdmin(showClaim=false){
   try{
     const isAdmin=await api('/rest/v1/rpc/is_current_user_admin',{method:'POST',auth:true,body:'{}'});
-    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadSiteSettings(true),loadAdminUsers(),loadAdminSuggestions()]); await updateAdminAlerts(); }
+    if(isAdmin){ $('#adminLogin').classList.add('hidden'); $('#adminDashboard').classList.remove('hidden'); await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadCustomerStock(),loadSiteSettings(true),loadAdminUsers(),loadAdminSuggestions()]); await updateAdminAlerts(); }
     else { $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent='This account is signed in but is not yet an admin.'; $('#claimAdminButton').classList.toggle('hidden',!showClaim); }
   }catch{ logout(); }
 }
@@ -1054,6 +1054,44 @@ async function removeAdmin(id,email){
 
 
 
+let customerStockProducts=[];
+async function loadCustomerStock(){
+  const code=$('#customerStockAccount')?.value||'CUSTOMER',box=$('#customerStockList'),msg=$('#customerStockMessage');
+  if(!box)return;
+  if(msg)msg.textContent='Loading '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
+  try{
+    const [ps,inv]=await Promise.all([
+      api('/rest/v1/products?select=id,sku,name,group_name,category,image_url,active&active=eq.true&order=group_name.asc,name.asc',{auth:true}),
+      api('/rest/v1/rpc/admin_customer_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:code})})
+    ]);
+    const stockMap=new Map((inv||[]).map(x=>[String(x.product_id),Number(x.stock||0)]));
+    customerStockProducts=(ps||[]).map(p=>({...p,customer_stock:stockMap.get(String(p.id))||0}));
+    renderCustomerStock();
+    if(msg)msg.textContent=(code==='NSFT'?'NSFT':'Customer')+' inventory loaded.';
+  }catch(err){box.innerHTML='<div class="empty-state"><p>'+escapeHtml(err.message)+'</p></div>';if(msg)msg.textContent=err.message;}
+}
+function renderCustomerStock(){
+  const box=$('#customerStockList');if(!box)return;
+  const q=($('#customerStockSearch')?.value||'').trim().toLowerCase();
+  const rows=customerStockProducts.filter(p=>!q||`${p.name} ${p.sku||''} ${p.group_name||''}`.toLowerCase().includes(q));
+  box.innerHTML=rows.length?rows.map(p=>`<div class="fast-stock-row"><span><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'')}</small></span><div><small>Current ${p.customer_stock}</small><input class="customer-stock-input" data-product="${p.id}" type="number" min="0" step="1" value="${p.customer_stock}" inputmode="numeric"></div></div>`).join(''):'<div class="empty-state"><p>No products found.</p></div>';
+}
+async function saveCustomerStock(){
+  const code=$('#customerStockAccount')?.value||'CUSTOMER',inputs=$('.customer-stock-input'),btn=$('#saveCustomerStockButton'),msg=$('#customerStockMessage');
+  btn.disabled=true;msg.textContent='Saving '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
+  let saved=0;
+  try{
+    for(const input of inputs){
+      const qty=Number(input.value);if(!Number.isInteger(qty)||qty<0)continue;
+      await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:code,p_product_id:input.dataset.product,p_stock:qty})});saved++;
+    }
+    msg.textContent='Saved '+saved+' product quantities for '+(code==='NSFT'?'NSFT':'Customer')+'.';toast('Customer stock saved');await loadCustomerStock();
+    if(customerAccountName && ((code==='NSFT'&&customerAccountName.toUpperCase().includes('NSFT'))||(code==='CUSTOMER'&&!customerAccountName.toUpperCase().includes('NSFT'))))await loadProducts();
+  }catch(err){msg.textContent=err.message;toast('Customer stock could not be saved');}
+  finally{btn.disabled=false;}
+}
+
+
 let fastStockProducts=[];
 function renderFastStock(){
   const box=$('#fastStockList');if(!box)return;
@@ -1101,6 +1139,10 @@ async function saveFastStock(){
   }catch(err){msg.textContent=`Saved ${saved} before an error: ${err.message}`;toast('Some strain stock could not be saved');}
   finally{btn.disabled=false;}
 }
+
+if($('#customerStockAccount'))$('#customerStockAccount').onchange=loadCustomerStock;
+if($('#customerStockSearch'))$('#customerStockSearch').oninput=renderCustomerStock;
+if($('#saveCustomerStockButton'))$('#saveCustomerStockButton').onclick=saveCustomerStock;
 
 let stockCsvChanges = [];
 
