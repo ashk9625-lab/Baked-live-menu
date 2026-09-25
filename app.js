@@ -961,7 +961,8 @@ $('#productImageFile').addEventListener('change',async e=>{const file=e.target.f
 $('#settingsForm').addEventListener('submit',saveSiteSettings);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installAppButton')?.classList.remove('hidden')});
 $('#installAppButton').onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null}else toast('Use your browser menu and choose Add to Home Screen')};
-$('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
+if($('#ageVerificationForm')) $('#ageVerificationForm').addEventListener('submit',verifyCustomerAge);
+if($('#confirmAgeButton')) $('#confirmAgeButton').onclick=()=>{ localStorage.setItem('baked-age-verified-until', String(Date.now()+30*24*60*60*1000)); $('#ageGate')?.classList.add('hidden'); };
 if($('#customerIdNumber'))$('#customerIdNumber').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,13)});
 $('#leaveSite').onclick=()=>location.href='https://www.google.com';
 {
