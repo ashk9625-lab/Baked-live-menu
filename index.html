@@ -36,7 +36,7 @@
       <span><small>BAKED AFRICA</small><strong>Live Menu</strong></span>
     </button>
     <div class="top-actions">
-      
+      <span class="live-pill"><i></i> Live stock</span>
       <button id="surpriseButton" class="btn surprise-header compact">🎲 Surprise Me</button>
       <button id="adminButton" class="btn ghost compact">Admin</button>
       <button id="cartButton" class="cart-button" aria-label="Open cart">Cart <span id="cartCount">0</span></button>
@@ -141,7 +141,6 @@
           <button class="admin-tab active" data-tab="products">Products</button>
           <button class="admin-tab" data-tab="orders">Orders</button>
           <button class="admin-tab" data-tab="inventory">Inventory</button>
-          <button class="admin-tab" data-tab="customerstock">Stock Lists</button>
           <button class="admin-tab" data-tab="sales">Sales</button>
           <button class="admin-tab" data-tab="stockdashboard">Stock Dashboard</button>
           <button class="admin-tab" data-tab="suggestions">Suggestions</button>
@@ -223,14 +222,6 @@
           <div class="inventory-divider"></div>
           <div class="admin-toolbar"><h3>Stock History</h3><button id="refreshInventoryButton" class="btn ghost">Refresh</button></div>
           <div id="stockHistory" class="admin-list"></div>
-        </section>
-
-
-        <section id="customerstockTab" class="admin-tab-panel hidden">
-          <div class="admin-toolbar"><div><h3>Separate Stock Lists</h3><p class="admin-help">Keep NSFT stock completely separate from your normal CUSTOMER stock. Products stay shared; only quantities are separate.</p></div><button id="refreshCustomerStockButton" class="btn ghost" type="button">Refresh</button></div>
-          <div class="customer-stock-controls"><label>Stock list<select id="customerStockCustomer"><option value="CUSTOMER">CUSTOMER STOCK</option><option value="NSFT">NSFT STOCK</option></select></label><span id="customerStockMessage" class="form-message"></span></div>
-          <div id="customerStockList" class="fast-stock-list"></div>
-          <div class="fast-stock-footer"><span>NSFT and CUSTOMER quantities are stored separately.</span><button id="saveCustomerStockButton" class="btn primary" type="button">SAVE SELECTED STOCK</button></div>
         </section>
 
         <section id="salesTab" class="admin-tab-panel hidden">

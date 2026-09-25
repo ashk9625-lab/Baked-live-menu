@@ -901,7 +901,7 @@ function exportSalesCsv(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`baked-sales-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
 
-function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); if(tab==='customerstock')loadSeparateStock(); }
+function switchAdminTab(tab){ $$('.admin-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.admin-tab-panel').forEach(p=>p.classList.add('hidden')); $(`#${tab}Tab`).classList.remove('hidden'); if(tab==='sales')loadSales(); if(tab==='stockdashboard')loadStockDashboard(); }
 
 function luhnValidSouthAfricanId(idNumber){
   if(!/^\d{13}$/.test(idNumber)) return false;
@@ -1084,41 +1084,3 @@ if('serviceWorker' in navigator){
   });
 }
 
-/* ===== SEPARATE CUSTOMER / NSFT STOCK LISTS ===== */
-let separateStockAccounts=[];
-let separateStockRows=[];
-function separateStockAccount(){
-  const wanted=($('#customerStockCustomer')?.value||'CUSTOMER').toUpperCase();
-  return separateStockAccounts.find(a=>wanted==='NSFT'?/customer\s*1|nsft/i.test(`${a.name} ${a.login_code}`):/customer\s*2|^customer$/i.test(`${a.name} ${a.login_code}`));
-}
-async function loadSeparateStock(){
-  const box=$('#customerStockList'),msg=$('#customerStockMessage'); if(!box)return;
-  box.innerHTML='<div class="empty-state"><p>Loading stock…</p></div>'; if(msg)msg.textContent='';
-  try{
-    if(!separateStockAccounts.length) separateStockAccounts=await api('/rest/v1/customer_accounts?select=id,name,login_code&active=eq.true&order=created_at.asc',{auth:true});
-    const account=separateStockAccount(); if(!account)throw new Error('Stock list is not configured yet.');
-    const [inv,prods]=await Promise.all([
-      api(`/rest/v1/customer_inventory?customer_id=eq.${encodeURIComponent(account.id)}&select=product_id,stock,description_override`,{auth:true}),
-      api('/rest/v1/products?select=id,sku,name,description,active&active=eq.true&order=name.asc',{auth:true})
-    ]);
-    const im=new Map(inv.map(x=>[x.product_id,x]));
-    separateStockRows=prods.map(p=>({ ...p, customer_id:account.id, stock:Number(im.get(p.id)?.stock||0), description_override:im.get(p.id)?.description_override??p.description??'' }));
-    box.innerHTML=separateStockRows.map((p,i)=>`<div class="fast-stock-row" data-separate-stock-row="${i}"><div class="fast-stock-product"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.sku||'')}</small></div><label>QTY<input class="separate-stock-qty" type="number" min="0" step="1" value="${p.stock}"></label></div>`).join('')||'<div class="empty-state"><p>No products found.</p></div>';
-    if(msg)msg.textContent=`Showing ${$('#customerStockCustomer').value} STOCK`;
-  }catch(err){box.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; if(msg)msg.textContent=err.message;}
-}
-async function saveSeparateStock(){
-  const msg=$('#customerStockMessage');
-  try{
-    const account=separateStockAccount(); if(!account)throw new Error('Stock list is not configured yet.');
-    const rows=$$('#customerStockList [data-separate-stock-row]');
-    for(const row of rows){
-      const i=Number(row.dataset.separateStockRow),p=separateStockRows[i],stock=Math.max(0,Math.floor(Number(row.querySelector('.separate-stock-qty').value)||0));
-      await api(`/rest/v1/customer_inventory?customer_id=eq.${encodeURIComponent(account.id)}&product_id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({stock,updated_at:new Date().toISOString()})});
-    }
-    if(msg)msg.textContent=`${$('#customerStockCustomer').value} STOCK saved.`; toast(`${$('#customerStockCustomer').value} stock saved`); await loadSeparateStock();
-  }catch(err){if(msg)msg.textContent=err.message;toast(err.message);}
-}
-if($('#customerStockCustomer'))$('#customerStockCustomer').onchange=loadSeparateStock;
-if($('#refreshCustomerStockButton'))$('#refreshCustomerStockButton').onclick=loadSeparateStock;
-if($('#saveCustomerStockButton'))$('#saveCustomerStockButton').onclick=saveSeparateStock;
