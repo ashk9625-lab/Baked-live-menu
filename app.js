@@ -59,7 +59,7 @@ async function api(path, options={}) {
   if (!response.ok) {
     const body = await response.text();
     let msg = `Request failed (${response.status})`;
-    try { const j = JSON.parse(body); msg = j.message || j.error_description || j.hint || msg; } catch {}
+    try { const j = JSON.parse(body); msg = j.msg || j.message || j.error_description || j.error || j.hint || msg; } catch {}
     throw new Error(msg);
   }
   if (response.status === 204) return null;
