@@ -1680,7 +1680,7 @@ if('serviceWorker' in navigator){
 })();
 
 /* Camera barcode stock scanner */
-let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
+let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,zxingReader=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
 function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
 function fillScannerProducts(){const s=$('#scannerProduct');if(s)s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');}
 function showScannerResult(r){const box=$('#scannerResult');if(!box)return;box.innerHTML=`<div class="admin-row"><div class="admin-row-main">${r.image_url?`<img src="${escapeHtml(r.image_url)}" alt="" style="width:58px;height:58px;object-fit:cover;border-radius:8px">`:''}<div><strong>${escapeHtml(r.product_name)}</strong><small>${escapeHtml(r.barcode||'')} · +${Number(r.added||0)} units${r.shared_edible?' · Shared Edibles':''}</small></div></div><div class="admin-row-data"><strong>New stock: ${Number(r.new_stock||0)}</strong></div></div>`;}
@@ -1698,19 +1698,38 @@ async function processBarcode(raw){
  }catch(err){msg.textContent=err.message;}
 }
 async function startBarcodeScanner(){
- const msg=$('#scannerMessage');if(!('BarcodeDetector' in window)){msg.textContent='This browser does not support camera barcode scanning. Please use Chrome or Edge on this laptop.';return;}
+ const msg=$('#scannerMessage'),v=$('#barcodeVideo');
+ stopBarcodeScanner(false);
  try{
-   barcodeDetector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf']});
-   barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
-   const v=$('#barcodeVideo');v.srcObject=barcodeStream;v.style.display='block';await v.play();msg.textContent='Camera active — hold the barcode clearly in the box.';scanBarcodeFrame();
- }catch(err){msg.textContent='Camera could not start. Allow camera permission in the browser and try again.';}
+   v.style.display='block';
+   if('BarcodeDetector' in window){
+     barcodeDetector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf']});
+     barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+     v.srcObject=barcodeStream;await v.play();msg.textContent='Camera active — hold the barcode clearly in view.';scanBarcodeFrame();return;
+   }
+   if(window.ZXing?.BrowserMultiFormatReader){
+     zxingReader=new ZXing.BrowserMultiFormatReader();
+     msg.textContent='Starting camera…';
+     await zxingReader.decodeFromVideoDevice(null,v,(result,err)=>{
+       if(result?.getText)processBarcode(result.getText());
+     });
+     msg.textContent='Camera active — hold the barcode clearly in view.';return;
+   }
+   throw new Error('Barcode camera library did not load');
+ }catch(err){v.style.display='none';msg.textContent='Camera could not start. Please allow camera access, refresh the page and try again. '+(err?.message||'');}
 }
 async function scanBarcodeFrame(){
  if(!barcodeStream||!barcodeDetector)return;
  try{const codes=await barcodeDetector.detect($('#barcodeVideo'));if(codes?.[0]?.rawValue)await processBarcode(codes[0].rawValue);}catch{}
  barcodeScanTimer=setTimeout(scanBarcodeFrame,350);
 }
-function stopBarcodeScanner(){if(barcodeScanTimer)clearTimeout(barcodeScanTimer);barcodeScanTimer=null;if(barcodeStream)barcodeStream.getTracks().forEach(t=>t.stop());barcodeStream=null;const v=$('#barcodeVideo');if(v){v.pause();v.srcObject=null;v.style.display='none';}if($('#scannerMessage'))$('#scannerMessage').textContent='Camera stopped.';}
+function stopBarcodeScanner(showMessage=true){
+ if(barcodeScanTimer)clearTimeout(barcodeScanTimer);barcodeScanTimer=null;
+ if(barcodeStream)barcodeStream.getTracks().forEach(t=>t.stop());barcodeStream=null;barcodeDetector=null;
+ if(zxingReader){try{zxingReader.reset();}catch{}zxingReader=null;}
+ const v=$('#barcodeVideo');if(v){try{v.pause();}catch{}v.srcObject=null;v.style.display='none';}
+ if(showMessage&&$('#scannerMessage'))$('#scannerMessage').textContent='Camera stopped.';
+}
 async function saveScannedBarcode(){
  if(!pendingBarcode)return;
  const product=$('#scannerProduct').value,pack=Number($('#scannerPackQty').value);
