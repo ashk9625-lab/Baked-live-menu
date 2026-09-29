@@ -668,9 +668,25 @@ async function forgotAdminPassword(){
   if(!email){$('#loginMessage').textContent='Enter your admin email address first.';$('#loginEmail').focus();return;}
   $('#loginMessage').textContent='Sending password reset email…';
   try{
-    await api('/auth/v1/recover',{method:'POST',body:JSON.stringify({email})});
+    await api('/auth/v1/recover?redirect_to='+encodeURIComponent(window.location.origin+'/?password_reset=1'),{method:'POST',body:JSON.stringify({email})});
     $('#loginMessage').textContent='Password reset email sent. Check your inbox and spam/junk folder.';
   }catch(err){$('#loginMessage').textContent=err.message;}
+}
+async function handlePasswordRecovery(){
+  const params=new URLSearchParams(location.hash.replace(/^#/,''));
+  const query=new URLSearchParams(location.search);
+  if(params.get('type')!=='recovery'&&!query.has('password_reset'))return;
+  const token=params.get('access_token');
+  if(!token)return;
+  const password=prompt('Enter your new Admin password (minimum 8 characters):');
+  if(!password)return;
+  if(password.length<8){alert('Password must be at least 8 characters.');return;}
+  try{
+    await api('/auth/v1/user',{method:'PUT',headers:{Authorization:'Bearer '+token},body:JSON.stringify({password})});
+    history.replaceState({},document.title,location.pathname);
+    alert('Admin password updated. You can now sign in on your phone and laptop.');
+    showAdmin();
+  }catch(err){alert('Password reset failed: '+err.message);}
 }
 async function signupStaff(e){
   e.preventDefault();
@@ -1803,3 +1819,5 @@ async function saveCustomerOrderEdits(){
   btn.disabled=false;
 }
 window.addEventListener('DOMContentLoaded',()=>{const b=$('#saveCustomerOrderEditsButton');if(b)b.onclick=saveCustomerOrderEdits;});
+
+window.addEventListener('DOMContentLoaded',handlePasswordRecovery);
