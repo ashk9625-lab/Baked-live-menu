@@ -948,7 +948,7 @@ function printPackingSlip(order=selectedOrderDetail){
   if(!order)return toast('Open an order first');
   const items=order.order_items||[];
   const totalPieces=items.reduce((sum,i)=>sum+Number(i.quantity||0),0);
-  const rows=items.map(i=>`<tr><td>${escapeHtml(i.product_name)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`).join('');
+  const rows=items.map(i=>{const p=products.find(p=>String(p.id)===String(i.product_id));const strength=String(p?.strength||'').trim();const label=strength&&!String(i.product_name||'').toLowerCase().includes(strength.toLowerCase())?`${i.product_name} — ${strength}`:i.product_name;return `<tr><td>${escapeHtml(label)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`;}).join('');
   const w=window.open('','_blank','width=900,height=800');
   if(!w)return toast('Allow pop-ups to print the packing slip');
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Packing Slip ${escapeHtml(order.order_number)}</title>
