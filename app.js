@@ -16,6 +16,7 @@ const FALLBACK_PRODUCTS = [
 // Customer access is intentionally session-only: every fresh visit/reload asks which account to use.
 let customerSessionToken='';
 let customerAccountName='';
+let customerAccountCode='';
 localStorage.removeItem('baked-customer-session');
 localStorage.removeItem('baked-customer-name');
 function showCustomerGate(){
@@ -34,13 +35,13 @@ async function customerAccessLogin(e){
   try{
     const rows=await api('/rest/v1/rpc/customer_login',{method:'POST',body:JSON.stringify({p_code:document.getElementById('customerAccessCode').value,p_password:document.getElementById('customerAccessPassword').value})});
     const row=Array.isArray(rows)?rows[0]:rows;if(!row?.session_token)throw new Error('Login failed');
-    customerSessionToken=row.session_token;customerAccountName=row.customer_name||'';
+    customerSessionToken=row.session_token;customerAccountName=row.customer_name||'';customerAccountCode=String(row.customer_code||document.getElementById('customerAccessCode').value||'').toUpperCase();
     cart=[];persistCart();hideCustomerGate();await loadProducts();toast(customerAccountName+' menu loaded');
   }catch(err){msg.textContent='Incorrect account or password.';}
 }
 async function customerAccessLogout(){
   try{if(customerSessionToken)await api('/rest/v1/rpc/customer_logout',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});}catch{}
-  customerSessionToken='';customerAccountName='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');showCustomerGate();
+  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');showCustomerGate();
 }
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
@@ -426,7 +427,23 @@ function renderProducts(){
 async function loadProducts(){
   try{
     if(!customerSessionToken){products=[];showCustomerGate();return;}
-    const data=await api('/rest/v1/rpc/customer_menu',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});
+    let data;
+    try{
+      data=await api('/rest/v1/rpc/customer_menu',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});
+    }catch(menuErr){
+      console.warn('customer_menu RPC failed; using direct account inventory fallback',menuErr);
+      const code=customerAccountCode||((customerAccountName||'').toUpperCase().includes('NSFT')?'NSFT':'CUSTOMER');
+      const accounts=await api('/rest/v1/customer_accounts?select=id&login_code=eq.'+encodeURIComponent(code));
+      const nsftAccounts=await api('/rest/v1/customer_accounts?select=id&login_code=eq.NSFT');
+      const cid=accounts?.[0]?.id,nsftId=nsftAccounts?.[0]?.id;
+      if(!cid)throw menuErr;
+      const master=await api('/rest/v1/products?select=id,sku,name,group_name,category,strength,price,reorder_level,description,image_url,active,featured&active=eq.true&order=group_name.asc,name.asc');
+      const own=await api('/rest/v1/customer_inventory?select=product_id,stock&customer_id=eq.'+encodeURIComponent(cid));
+      const shared=nsftId?await api('/rest/v1/customer_inventory?select=product_id,stock&customer_id=eq.'+encodeURIComponent(nsftId)):[];
+      const ownMap=new Map((own||[]).map(x=>[x.product_id,Number(x.stock||0)]));
+      const sharedMap=new Map((shared||[]).map(x=>[x.product_id,Number(x.stock||0)]));
+      data=(master||[]).map(p=>({...p,stock:String(p.category||'').trim().toLowerCase()==='edibles'?(sharedMap.get(p.id)||0):(ownMap.get(p.id)||0)}));
+    }
     products=Array.isArray(data)?data:[];
     hideCustomerGate();
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
