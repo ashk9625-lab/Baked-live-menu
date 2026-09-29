@@ -1718,10 +1718,10 @@ async function processBarcode(raw){
  try{
    const rows=await api('/rest/v1/rpc/admin_barcode_lookup',{method:'POST',auth:true,body:JSON.stringify({p_barcode:barcode})});
    const found=Array.isArray(rows)?rows[0]:rows;
-   if(!found){pendingBarcode=barcode;stopBarcodeScanner(false);fillScannerProducts();$('#registerBarcodePanel')?.classList.remove('hidden');$('#scannedBarcodeValue').textContent=barcode;msg.textContent=`Barcode ${barcode} captured. Choose the product and pack quantity below, then Save & Add Stock.`;$('#registerBarcodePanel')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+   if(!found||!String(found.strain_name||'').trim()){pendingBarcode=barcode;stopBarcodeScanner(false);fillScannerProducts();if(found?.product_id&&$('#scannerProduct')){$('#scannerProduct').value=found.product_id;fillScannerStrains();}if(found?.pack_qty&&$('#scannerPackQty'))$('#scannerPackQty').value=String(found.pack_qty);$('#registerBarcodePanel')?.classList.remove('hidden');$('#scannedBarcodeValue').textContent=barcode;msg.textContent=found?`Barcode ${barcode} already maps to ${found.product_name}, but needs its exact strain. Choose the strain once and save it; future scans will add automatically.`:`Barcode ${barcode} captured. Choose the product, exact strain and pack quantity once, then Save & Add Stock.`;$('#registerBarcodePanel')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
    $('#registerBarcodePanel')?.classList.add('hidden');
    const r=await api('/rest/v1/rpc/admin_scan_add_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:$('#scannerAccount').value,p_barcode:barcode})});
-   lastBarcodeScan={barcode,account:$('#scannerAccount').value};$('#undoScanButton').disabled=false;showScannerResult(r);msg.textContent=`${r.product_name}: +${r.added} added successfully.`;toast(`+${r.added} ${r.product_name}`);await loadCustomerStock();
+   lastBarcodeScan={barcode,account:$('#scannerAccount').value};$('#undoScanButton').disabled=false;showScannerResult(r);msg.textContent=`${r.product_name} — ${r.strain_name}: +${r.added} added. Strain stock ${r.strain_stock}.`;toast(`+${r.added} ${r.product_name} — ${r.strain_name}`);await loadCustomerStock();
  }catch(err){msg.textContent=err.message;}finally{barcodeProcessing=false;}
 }
 async function startBarcodeScanner(){
