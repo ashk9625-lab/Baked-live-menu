@@ -752,7 +752,9 @@ let adminOrdersCache=[];
 
 async function loadOrders(){
   try{
-    const accountCode=$('#orderAccountFilter')?.value||'CUSTOMER';
+    const accountCode=(customerAccountName||'').toUpperCase().includes('NSFT')?'NSFT':'CUSTOMER';
+    const orderHeading=$('#ordersAccountHeading');if(orderHeading)orderHeading.textContent=accountCode==='NSFT'?'NSFT Orders':'Customer Orders';
+    const orderHelp=$('#ordersAccountHelp');if(orderHelp)orderHelp.textContent=accountCode==='NSFT'?'NSFT orders only.':'Customer orders only.';
     const accounts=await api('/rest/v1/customer_accounts?select=id,login_code&login_code=eq.'+encodeURIComponent(accountCode),{auth:true});
     const accountId=accounts?.[0]?.id;
     const orders=accountId?await api('/rest/v1/orders?select=*,order_items(*)&customer_account_id=eq.'+encodeURIComponent(accountId)+'&order=created_at.desc&limit=100',{auth:true}):[];
