@@ -1704,13 +1704,19 @@ async function startBarcodeScanner(){
    v.style.display='block';
    if('BarcodeDetector' in window){
      barcodeDetector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf']});
-     barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+     barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false}).catch(()=>navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}));
      v.srcObject=barcodeStream;await v.play();msg.textContent='Camera active — hold the barcode clearly in view.';scanBarcodeFrame();return;
    }
    if(window.ZXing?.BrowserMultiFormatReader){
      zxingReader=new ZXing.BrowserMultiFormatReader();
      msg.textContent='Starting camera…';
-     await zxingReader.decodeFromVideoDevice(null,v,(result,err)=>{
+     let deviceId=null;
+     try{
+       const devices=await ZXing.BrowserCodeReader.listVideoInputDevices();
+       const rear=devices.find(d=>/back|rear|environment/i.test(d.label));
+       deviceId=(rear||devices[devices.length-1]||{}).deviceId||null;
+     }catch{}
+     await zxingReader.decodeFromVideoDevice(deviceId,v,(result,err)=>{
        if(result?.getText)processBarcode(result.getText());
      });
      msg.textContent='Camera active — hold the barcode clearly in view.';return;
