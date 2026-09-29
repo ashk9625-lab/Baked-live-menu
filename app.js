@@ -1657,6 +1657,49 @@ if('serviceWorker' in navigator){
   window.closeProductImage=closeProductImage;
 })();
 
+/* Camera barcode stock scanner */
+let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
+function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
+function fillScannerProducts(){const s=$('#scannerProduct');if(s)s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');}
+function showScannerResult(r){const box=$('#scannerResult');if(!box)return;box.innerHTML=`<div class="admin-row"><div class="admin-row-main">${r.image_url?`<img src="${escapeHtml(r.image_url)}" alt="" style="width:58px;height:58px;object-fit:cover;border-radius:8px">`:''}<div><strong>${escapeHtml(r.product_name)}</strong><small>${escapeHtml(r.barcode||'')} · +${Number(r.added||0)} units${r.shared_edible?' · Shared Edibles':''}</small></div></div><div class="admin-row-data"><strong>New stock: ${Number(r.new_stock||0)}</strong></div></div>`;}
+async function processBarcode(raw){
+ const barcode=String(raw||'').trim();if(!barcode)return;
+ const now=Date.now();if(barcode===lastBarcodeValue&&now-lastBarcodeAt<2500)return;lastBarcodeValue=barcode;lastBarcodeAt=now;
+ const msg=$('#scannerMessage');msg.textContent=`Barcode ${barcode} detected…`;
+ try{
+   const rows=await api('/rest/v1/rpc/admin_barcode_lookup',{method:'POST',auth:true,body:JSON.stringify({p_barcode:barcode})});
+   const found=Array.isArray(rows)?rows[0]:rows;
+   if(!found){pendingBarcode=barcode;fillScannerProducts();$('#registerBarcodePanel')?.classList.remove('hidden');msg.textContent=`New barcode ${barcode}. Choose its product and pack quantity, then Save Barcode.`;return;}
+   $('#registerBarcodePanel')?.classList.add('hidden');
+   const r=await api('/rest/v1/rpc/admin_scan_add_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:$('#scannerAccount').value,p_barcode:barcode})});
+   lastBarcodeScan={barcode,account:$('#scannerAccount').value};$('#undoScanButton').disabled=false;showScannerResult(r);msg.textContent=`${r.product_name}: +${r.added} added successfully.`;toast(`+${r.added} ${r.product_name}`);await loadCustomerStock();
+ }catch(err){msg.textContent=err.message;}
+}
+async function startBarcodeScanner(){
+ const msg=$('#scannerMessage');if(!('BarcodeDetector' in window)){msg.textContent='This browser does not support camera barcode scanning. Please use Chrome or Edge on this laptop.';return;}
+ try{
+   barcodeDetector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf']});
+   barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+   const v=$('#barcodeVideo');v.srcObject=barcodeStream;v.style.display='block';await v.play();msg.textContent='Camera active — hold the barcode clearly in the box.';scanBarcodeFrame();
+ }catch(err){msg.textContent='Camera could not start. Allow camera permission in the browser and try again.';}
+}
+async function scanBarcodeFrame(){
+ if(!barcodeStream||!barcodeDetector)return;
+ try{const codes=await barcodeDetector.detect($('#barcodeVideo'));if(codes?.[0]?.rawValue)await processBarcode(codes[0].rawValue);}catch{}
+ barcodeScanTimer=setTimeout(scanBarcodeFrame,350);
+}
+function stopBarcodeScanner(){if(barcodeScanTimer)clearTimeout(barcodeScanTimer);barcodeScanTimer=null;if(barcodeStream)barcodeStream.getTracks().forEach(t=>t.stop());barcodeStream=null;const v=$('#barcodeVideo');if(v){v.pause();v.srcObject=null;v.style.display='none';}if($('#scannerMessage'))$('#scannerMessage').textContent='Camera stopped.';}
+async function saveScannedBarcode(){
+ if(!pendingBarcode)return;
+ const product=$('#scannerProduct').value,pack=Number($('#scannerPackQty').value);
+ try{await api('/rest/v1/rpc/admin_save_barcode',{method:'POST',auth:true,body:JSON.stringify({p_barcode:pendingBarcode,p_product_id:product,p_pack_qty:pack})});const b=pendingBarcode;pendingBarcode='';$('#registerBarcodePanel').classList.add('hidden');$('#scannerMessage').textContent='Barcode saved. Scanning it now…';lastBarcodeValue='';await processBarcode(b);}catch(err){$('#scannerMessage').textContent=err.message;}
+}
+async function undoLastBarcodeScan(){
+ if(!lastBarcodeScan)return;
+ try{const r=await api('/rest/v1/rpc/admin_scan_remove_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:lastBarcodeScan.account,p_barcode:lastBarcodeScan.barcode})});$('#scannerMessage').textContent=`Undo complete: -${r.removed} from ${r.product_name}. New stock ${r.new_stock}.`;lastBarcodeScan=null;$('#undoScanButton').disabled=true;await loadCustomerStock();}catch(err){$('#scannerMessage').textContent=err.message;}
+}
+window.addEventListener('DOMContentLoaded',()=>{if($('#startScannerButton'))$('#startScannerButton').onclick=startBarcodeScanner;if($('#stopScannerButton'))$('#stopScannerButton').onclick=stopBarcodeScanner;if($('#saveBarcodeButton'))$('#saveBarcodeButton').onclick=saveScannedBarcode;if($('#undoScanButton'))$('#undoScanButton').onclick=undoLastBarcodeScan;});
+
 // Saved strain manager
 document.addEventListener('click',e=>{if(e.target?.id==='addProductStrainRow'){e.preventDefault();addProductStrainRow({name:'',qty:0});const rows=$$('#productStrainRows .product-strain-name');rows[rows.length-1]?.focus();}});
 
