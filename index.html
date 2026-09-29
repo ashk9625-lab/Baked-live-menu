@@ -164,6 +164,23 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
+          <div class="fast-stock-card" id="barcodeScannerCard">
+            <div class="admin-toolbar"><div><h3>📷 Stock Scanner</h3><p class="admin-help">Use the laptop camera to scan packaged stock. Register a barcode once, then future scans add the saved pack quantity automatically.</p></div><select id="scannerAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button id="startScannerButton" class="btn primary" type="button">Start Camera</button><button id="stopScannerButton" class="btn ghost" type="button">Stop Camera</button><button id="undoScanButton" class="btn ghost" type="button" disabled>Undo Last Scan</button></div>
+            <video id="barcodeVideo" playsinline muted style="display:none;width:min(100%,560px);max-height:340px;background:#111;border-radius:12px;object-fit:cover"></video>
+            <p id="scannerMessage" class="form-message">Camera ready to start.</p>
+            <div id="scannerResult"></div>
+            <div id="registerBarcodePanel" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(127,127,127,.25)">
+              <h4>Register this barcode</h4>
+              <p class="admin-help">First scan only: choose the product and whether this barcode represents a pack of 10 or 20.</p>
+              <div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end">
+                <label style="margin:0">Product<select id="scannerProduct"></select></label>
+                <label style="margin:0">Pack Qty<select id="scannerPackQty"><option value="10">10</option><option value="20">20</option></select></label>
+                <button id="saveBarcodeButton" class="btn primary" type="button">Save Barcode</button>
+              </div>
+            </div>
+          </div>
+          <div class="inventory-divider"></div>
           <div class="fast-stock-card customer-stock-admin">
             <div class="admin-toolbar"><div><h3>Customer Stock</h3><p class="admin-help">Choose which customer menu you are stocking. Customer and NSFT quantities are completely separate.</p></div><select id="customerStockAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></div>
             <div class="fast-stock-search"><input id="customerStockSearch" type="search" placeholder="Search products…"></div>
