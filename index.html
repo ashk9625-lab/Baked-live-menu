@@ -165,6 +165,7 @@
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
           <div class="fast-stock-card" id="barcodeScannerCard">
+            <div id="mobileScannerBanner" style="margin-bottom:12px;padding:12px 14px;border-radius:12px;background:rgba(24,170,95,.10)"><strong>📱 Mobile Stock Scanner</strong><br><small>On your phone, use the rear camera for faster barcode scanning. This updates the same live inventory.</small></div>
             <div class="admin-toolbar"><div><h3>📷 Stock Scanner</h3><p class="admin-help">Use the laptop camera to scan packaged stock. Register a barcode once, then future scans add the saved pack quantity automatically.</p></div><select id="scannerAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button id="startScannerButton" class="btn primary" type="button">Start Camera</button><button id="stopScannerButton" class="btn ghost" type="button">Stop Camera</button><button id="undoScanButton" class="btn ghost" type="button" disabled>Undo Last Scan</button></div>
             <video id="barcodeVideo" playsinline muted style="display:none;width:min(100%,560px);max-height:340px;background:#111;border-radius:12px;object-fit:cover"></video>
