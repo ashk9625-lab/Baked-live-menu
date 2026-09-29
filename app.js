@@ -663,6 +663,15 @@ async function login(e){
     accessToken=data.access_token; localStorage.setItem('baked-access-token',accessToken); await verifyAdmin(true);
   }catch(err){ $('#loginMessage').textContent=err.message; }
 }
+async function forgotAdminPassword(){
+  const email=$('#loginEmail').value.trim();
+  if(!email){$('#loginMessage').textContent='Enter your admin email address first.';$('#loginEmail').focus();return;}
+  $('#loginMessage').textContent='Sending password reset email…';
+  try{
+    await api('/auth/v1/recover',{method:'POST',body:JSON.stringify({email})});
+    $('#loginMessage').textContent='Password reset email sent. Check your inbox and spam/junk folder.';
+  }catch(err){$('#loginMessage').textContent=err.message;}
+}
 async function signupStaff(e){
   e.preventDefault();
   const email=$('#signupEmail').value.trim(), password=$('#signupPassword').value;
@@ -1528,7 +1537,7 @@ function runSurpriseMe(){
   $('#surpriseAgain').onclick=runSurpriseMe;
 }
 
-$('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
+$('#clearCartButton').onclick=clearCart; $('#adminButton').onclick=showAdmin; $('#homeButton').onclick=showStore; $('#loginForm').onsubmit=login; $('#forgotPasswordButton').onclick=forgotAdminPassword; $('#signupForm').onsubmit=signupStaff; $('#logoutButton').onclick=logout; $('#claimAdminButton').onclick=claimAdmin;
 $('#masterStrainSearch')&&($('#masterStrainSearch').oninput=renderMasterStrains); $('#addMasterStrainButton')&&($('#addMasterStrainButton').onclick=addMasterStrain); $('#addSavedStrainToProduct')&&($('#addSavedStrainToProduct').onclick=addSelectedMasterStrainToProduct);
 $('#fastStockSearch').oninput=renderFastStock; $('#refreshFastStockButton').onclick=loadFastStock; $('#saveFastStockButton').onclick=saveFastStock; $('#downloadStockTemplateButton').onclick=downloadStockCsvTemplate; $('#previewStockCsvButton').onclick=previewStockCsv; $('#applyStockCsvButton').onclick=applyStockCsv; $('#stockCsvFile').onchange=previewStockCsv; $('#addProductButton').onclick=()=>openProductModal(); $('#productForm').onsubmit=saveProduct; $('#stockForm').onsubmit=adjustStock; $('#refreshOrdersButton').onclick=loadOrders; $('#deleteOldOrdersButton').onclick=deleteOldCompletedOrders; $('#refreshInventoryButton').onclick=loadInventory; $('#addAdminForm').onsubmit=addAdmin; $('#refreshAdminsButton').onclick=loadAdminUsers;
 $$('.admin-tab').forEach(b=>b.onclick=()=>switchAdminTab(b.dataset.tab));
