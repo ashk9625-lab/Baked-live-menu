@@ -173,12 +173,12 @@
             <p id="scannerMessage" class="form-message">Camera ready to start.</p>
             <div id="scannerResult"></div>
             <div id="registerBarcodePanel" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(127,127,127,.25)">
-              <h4>Register this barcode</h4>
+              <h4>Register this barcode</h4><p style="font-size:1.1rem;font-weight:700;overflow-wrap:anywhere">Scanned: <span id="scannedBarcodeValue"></span></p>
               <p class="admin-help">First scan only: choose the product and whether this barcode represents a pack of 10 or 20.</p>
-              <div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px auto;gap:8px;align-items:end">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end">
                 <label style="margin:0">Product<select id="scannerProduct"></select></label>
                 <label style="margin:0">Pack Qty<select id="scannerPackQty"><option value="10">10</option><option value="20">20</option></select></label>
-                <button id="saveBarcodeButton" class="btn primary" type="button">Save Barcode</button>
+                <button id="saveBarcodeButton" class="btn primary" type="button">Save &amp; Add Stock</button>
               </div>
             </div>
           </div>
