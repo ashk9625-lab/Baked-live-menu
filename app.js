@@ -430,7 +430,12 @@ async function loadProducts(){
     products=Array.isArray(data)?data:[];
     hideCustomerGate();
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
-  }catch(e){ products=[]; $('#status').textContent='Could not load the live inventory'; }
+  }catch(e){
+    products=[];
+    $('#status').textContent='Could not load the live inventory: '+(e?.message||'Unknown error');
+    console.error('customer_menu failed',e);
+    toast('Live inventory could not load');
+  }
   updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
 function addToCart(id,requestedQuantity=1){
