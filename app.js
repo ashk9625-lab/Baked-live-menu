@@ -1709,18 +1709,19 @@ let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,zxingReader=nu
 function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
 function fillScannerProducts(){const s=$('#scannerProduct');if(s)s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');}
 function showScannerResult(r){const box=$('#scannerResult');if(!box)return;box.innerHTML=`<div class="admin-row"><div class="admin-row-main">${r.image_url?`<img src="${escapeHtml(r.image_url)}" alt="" style="width:58px;height:58px;object-fit:cover;border-radius:8px">`:''}<div><strong>${escapeHtml(r.product_name)}</strong><small>${escapeHtml(r.barcode||'')} · +${Number(r.added||0)} units${r.shared_edible?' · Shared Edibles':''}</small></div></div><div class="admin-row-data"><strong>New stock: ${Number(r.new_stock||0)}</strong></div></div>`;}
+let barcodeProcessing=false;
 async function processBarcode(raw){
- const barcode=String(raw||'').trim();if(!barcode)return;
+ const barcode=String(raw||'').trim();if(!barcode||barcodeProcessing||pendingBarcode)return;
  const now=Date.now();if(barcode===lastBarcodeValue&&now-lastBarcodeAt<2500)return;lastBarcodeValue=barcode;lastBarcodeAt=now;
- const msg=$('#scannerMessage');msg.textContent=`Barcode ${barcode} detected…`;
+ const msg=$('#scannerMessage');barcodeProcessing=true;msg.textContent=`Barcode ${barcode} detected…`;
  try{
    const rows=await api('/rest/v1/rpc/admin_barcode_lookup',{method:'POST',auth:true,body:JSON.stringify({p_barcode:barcode})});
    const found=Array.isArray(rows)?rows[0]:rows;
-   if(!found){pendingBarcode=barcode;fillScannerProducts();$('#registerBarcodePanel')?.classList.remove('hidden');msg.textContent=`New barcode ${barcode}. Choose its product and pack quantity, then Save Barcode.`;return;}
+   if(!found){pendingBarcode=barcode;stopBarcodeScanner(false);fillScannerProducts();$('#registerBarcodePanel')?.classList.remove('hidden');$('#scannedBarcodeValue').textContent=barcode;msg.textContent=`Barcode ${barcode} captured. Choose the product and pack quantity below, then Save & Add Stock.`;$('#registerBarcodePanel')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
    $('#registerBarcodePanel')?.classList.add('hidden');
    const r=await api('/rest/v1/rpc/admin_scan_add_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:$('#scannerAccount').value,p_barcode:barcode})});
    lastBarcodeScan={barcode,account:$('#scannerAccount').value};$('#undoScanButton').disabled=false;showScannerResult(r);msg.textContent=`${r.product_name}: +${r.added} added successfully.`;toast(`+${r.added} ${r.product_name}`);await loadCustomerStock();
- }catch(err){msg.textContent=err.message;}
+ }catch(err){msg.textContent=err.message;}finally{barcodeProcessing=false;}
 }
 async function startBarcodeScanner(){
  const msg=$('#scannerMessage'),v=$('#barcodeVideo');
@@ -1764,7 +1765,7 @@ function stopBarcodeScanner(showMessage=true){
 async function saveScannedBarcode(){
  if(!pendingBarcode)return;
  const product=$('#scannerProduct').value,pack=Number($('#scannerPackQty').value);
- try{await api('/rest/v1/rpc/admin_save_barcode',{method:'POST',auth:true,body:JSON.stringify({p_barcode:pendingBarcode,p_product_id:product,p_pack_qty:pack})});const b=pendingBarcode;pendingBarcode='';$('#registerBarcodePanel').classList.add('hidden');$('#scannerMessage').textContent='Barcode saved. Scanning it now…';lastBarcodeValue='';await processBarcode(b);}catch(err){$('#scannerMessage').textContent=err.message;}
+ try{await api('/rest/v1/rpc/admin_save_barcode',{method:'POST',auth:true,body:JSON.stringify({p_barcode:pendingBarcode,p_product_id:product,p_pack_qty:pack})});const b=pendingBarcode;pendingBarcode='';$('#registerBarcodePanel').classList.add('hidden');$('#scannerMessage').textContent='Barcode saved. Adding stock…';lastBarcodeValue='';await processBarcode(b);}catch(err){$('#scannerMessage').textContent=err.message;}
 }
 async function undoLastBarcodeScan(){
  if(!lastBarcodeScan)return;
