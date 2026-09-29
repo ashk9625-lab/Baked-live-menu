@@ -1707,8 +1707,9 @@ if('serviceWorker' in navigator){
 /* Camera barcode stock scanner */
 let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,zxingReader=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
 function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
-function fillScannerProducts(){const s=$('#scannerProduct');if(s)s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');}
-function showScannerResult(r){const box=$('#scannerResult');if(!box)return;box.innerHTML=`<div class="admin-row"><div class="admin-row-main">${r.image_url?`<img src="${escapeHtml(r.image_url)}" alt="" style="width:58px;height:58px;object-fit:cover;border-radius:8px">`:''}<div><strong>${escapeHtml(r.product_name)}</strong><small>${escapeHtml(r.barcode||'')} · +${Number(r.added||0)} units${r.shared_edible?' · Shared Edibles':''}</small></div></div><div class="admin-row-data"><strong>New stock: ${Number(r.new_stock||0)}</strong></div></div>`;}
+function fillScannerStrains(){const p=products.find(x=>String(x.id)===String($('#scannerProduct')?.value));const s=$('#scannerStrain');if(!s)return;const strains=p?parseStrainList(p.description):[];s.innerHTML='<option value="">New strain…</option>'+strains.map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)} — current ${Number(x.qty||0)}</option>`).join('');}
+function fillScannerProducts(){const s=$('#scannerProduct');if(s){s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');s.onchange=fillScannerStrains;fillScannerStrains();}}
+function showScannerResult(r){const box=$('#scannerResult');if(!box)return;box.innerHTML=`<div class="admin-row"><div class="admin-row-main">${r.image_url?`<img src="${escapeHtml(r.image_url)}" alt="" style="width:58px;height:58px;object-fit:cover;border-radius:8px">`:''}<div><strong>${escapeHtml(r.product_name)}${r.strain_name?` — ${escapeHtml(r.strain_name)}`:''}</strong><small>${escapeHtml(r.barcode||'')} · +${Number(r.added||0)} units${r.shared_edible?' · Shared Edibles':''}</small></div></div><div class="admin-row-data"><strong>New stock: ${Number(r.new_stock||0)}</strong></div></div>`;}
 let barcodeProcessing=false;
 async function processBarcode(raw){
  const barcode=String(raw||'').trim();if(!barcode||barcodeProcessing||pendingBarcode)return;
@@ -1765,7 +1766,11 @@ function stopBarcodeScanner(showMessage=true){
 async function saveScannedBarcode(){
  if(!pendingBarcode)return;
  const product=$('#scannerProduct').value,pack=Number($('#scannerPackQty').value);
- try{await api('/rest/v1/rpc/admin_save_barcode',{method:'POST',auth:true,body:JSON.stringify({p_barcode:pendingBarcode,p_product_id:product,p_pack_qty:pack})});const b=pendingBarcode;pendingBarcode='';$('#registerBarcodePanel').classList.add('hidden');$('#scannerMessage').textContent='Barcode saved. Adding stock…';lastBarcodeValue='';await processBarcode(b);}catch(err){$('#scannerMessage').textContent=err.message;}
+ let strain=($('#scannerStrain')?.value||'').trim();
+ const newName=($('#scannerNewStrain')?.value||'').trim(),type=($('#scannerStrainType')?.value||'').trim();
+ if(!strain&&newName){if(!type){$('#scannerMessage').textContent='Choose Sativa, Indica or Hybrid for the new strain.';return;}strain=`${newName} (${type})`;}
+ if(!strain){$('#scannerMessage').textContent='Choose an existing strain or enter a new strain name and type.';return;}
+ try{await api('/rest/v1/rpc/admin_save_barcode',{method:'POST',auth:true,body:JSON.stringify({p_barcode:pendingBarcode,p_product_id:product,p_pack_qty:pack,p_strain_name:strain})});const b=pendingBarcode;pendingBarcode='';$('#registerBarcodePanel').classList.add('hidden');$('#scannerMessage').textContent=`Barcode saved as ${strain}. Adding stock…`;lastBarcodeValue='';await processBarcode(b);}catch(err){$('#scannerMessage').textContent=err.message;}
 }
 async function undoLastBarcodeScan(){
  if(!lastBarcodeScan)return;
