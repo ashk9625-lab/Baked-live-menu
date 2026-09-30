@@ -948,7 +948,7 @@ function printPackingSlip(order=selectedOrderDetail){
   if(!order)return toast('Open an order first');
   const items=order.order_items||[];
   const totalPieces=items.reduce((sum,i)=>sum+Number(i.quantity||0),0);
-  const rows=items.map(i=>{const p=products.find(p=>String(p.id)===String(i.product_id));const strength=String(p?.strength||'').trim();const isPreRoll=/pre[- ]?roll/i.test(String(p?.category||''));let label=String(i.product_name||'');if(isPreRoll){label=label.replace(/\s*[—-]\s*\d+(?:\.\d+)?\s*mg\b/ig,'').replace(/\s+\d+(?:\.\d+)?\s*mg\b/ig,'').trim();}else if(strength&&!label.toLowerCase().includes(strength.toLowerCase())){label=`${label} — ${strength}`;}return `<tr><td>${escapeHtml(label)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`;}).join('');
+  const rows=items.map(i=>{const p=products.find(p=>String(p.id)===String(i.product_id));const strength=String(p?.strength||'').trim();const isPreRoll=/pre[- ]?roll/i.test(String(p?.category||''));let label=String(i.product_name||'');if(isPreRoll){label=label.replace(/\s*[—-]\s*\d+(?:\.\d+)?\s*mg\b/ig,'').replace(/\s+\d+(?:\.\d+)?\s*mg\b/ig,'').trim();}else if(/flower/i.test(String(p?.category||''))){label=label.replace(/\s*[—-]\s*\d+(?:\.\d+)?\s*g\b\s*$/i,'').trim();}else if(strength&&!label.toLowerCase().includes(strength.toLowerCase())){label=`${label} — ${strength}`;}return `<tr><td>${escapeHtml(label)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`;}).join('');
   const w=window.open('','_blank','width=900,height=800');
   if(!w)return toast('Allow pop-ups to print the packing slip');
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Packing Slip ${escapeHtml(order.order_number)}</title>
