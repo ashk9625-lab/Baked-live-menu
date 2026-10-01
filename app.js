@@ -1171,39 +1171,51 @@ function renderFastStock(){
 }
 async function loadFastStock(){
   try{
-    fastStockProducts=await api('/rest/v1/products?select=id,sku,name,description&order=name.asc',{auth:true});
+    const code=$('#customerStockAccount')?.value||'CUSTOMER';
+    const [ps,inv]=await Promise.all([
+      api('/rest/v1/products?select=id,sku,name,category,description&order=name.asc',{auth:true}),
+      api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:code})})
+    ]);
+    const stockMap=new Map((inv||[]).map(x=>[String(x.product_id)+'::'+String(x.strain_name).trim().toLowerCase(),Number(x.stock||0)]));
+    fastStockProducts=(ps||[]).map(p=>{
+      const parts=splitProductDescription(p.description);
+      const strains=parseStrainList(p.description);
+      if(!strains.length)return p;
+      const text=strains.map(s=>`${s.name} = ${stockMap.get(String(p.id)+'::'+String(s.name).trim().toLowerCase())??0}`).join('\n');
+      return {...p,description:composeProductDescription(parts.description,text)};
+    });
     renderFastStock();
+    const msg=$('#fastStockMessage');if(msg)msg.textContent=(code==='NSFT'?'NSFT':'Customer')+' strain stock loaded.';
   }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function saveFastStock(){
+  const code=$('#customerStockAccount')?.value||'CUSTOMER';
   const inputs=$$('.fast-stock-input');
-  const byProduct=new Map();
+  const changes=[];
   inputs.forEach(input=>{
     const p=fastStockProducts.find(x=>String(x.id)===String(input.dataset.product));if(!p)return;
-    const strains=parseStrainList(p.description);
-    const i=Number(input.dataset.index),qty=Number(input.value);
+    const strains=parseStrainList(p.description),i=Number(input.dataset.index),qty=Number(input.value);
     if(!strains[i]||!Number.isInteger(qty)||qty<0)return;
-    strains[i].qty=qty;byProduct.set(String(p.id),{p,strains});
+    changes.push({product_id:p.id,strain_name:strains[i].name,stock:qty});
   });
-  if(!byProduct.size){toast('No strain stock to save');return;}
-  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');btn.disabled=true;msg.textContent=`Saving ${byProduct.size} product${byProduct.size===1?'':'s'}…`;let saved=0;
+  if(!changes.length){toast('No strain stock to save');return;}
+  const btn=$('#saveFastStockButton'),msg=$('#fastStockMessage');btn.disabled=true;msg.textContent='Saving '+(code==='NSFT'?'NSFT':'Customer')+' strain stock…';let saved=0;
   try{
-    for(const {p,strains} of byProduct.values()){
-      const normal=splitProductDescription(p.description).description;
-      const strainText=strains.map(s=>`${s.name} = ${s.qty}`).join('\n');
-      const description=composeProductDescription(normal,strainText);
-      await api(`/rest/v1/products?id=eq.${encodeURIComponent(p.id)}`,{method:'PATCH',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify({description,updated_at:new Date().toISOString()})});
+    for(const x of changes){
+      await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:code,p_product_id:x.product_id,p_strain_name:x.strain_name,p_stock:x.stock})});
       saved++;
     }
-    toast('Strain stock updated');msg.textContent=`Saved ${saved} product${saved===1?'':'s'} successfully.`;
-    await Promise.all([loadFastStock(),loadAdminProducts(),loadInventory(),loadProducts()]);
+    toast((code==='NSFT'?'NSFT':'Customer')+' strain stock updated');
+    msg.textContent=`Saved ${saved} strain quantities for ${code==='NSFT'?'NSFT':'Customer'}.`;
+    await Promise.all([loadFastStock(),loadCustomerStock()]);
+    if(customerSessionToken)await loadProducts();
   }catch(err){msg.textContent=`Saved ${saved} before an error: ${err.message}`;toast('Some strain stock could not be saved');}
   finally{btn.disabled=false;}
 }
 
 if($('#orderAccountFilter'))$('#orderAccountFilter').onchange=loadOrders;
 if($('#customerLogoutButton'))$('#customerLogoutButton').onclick=customerAccessLogout;
-if($('#customerStockAccount'))$('#customerStockAccount').onchange=loadCustomerStock;
+if($('#customerStockAccount'))$('#customerStockAccount').onchange=()=>{loadCustomerStock();loadFastStock();};
 if($('#customerStockSearch'))$('#customerStockSearch').oninput=renderCustomerStock;
 if($('#saveCustomerStockButton'))$('#saveCustomerStockButton').onclick=saveCustomerStock;
 
