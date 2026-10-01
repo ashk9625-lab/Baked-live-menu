@@ -787,7 +787,7 @@ async function deleteProduct(id,name,button,sku=''){
 
 function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product';
-  const stockAccount=$('#productStockAccount');if(stockAccount)stockAccount.value=$('#customerStockAccount')?.value||'NSFT'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
+  const stockAccount=$('#productStockAccount');if(stockAccount)stockAccount.value=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
   if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
   renderProductStrainManager(p?parseStrainList(p.description):[]);
   refreshProductSavedStrainSelect();
@@ -797,7 +797,7 @@ async function saveProduct(e){
   e.preventDefault();
   const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains);
   const id=$('#productId').value;
-  const accountCode=$('#productStockAccount')?.value||'NSFT';
+  const accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
   const payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:id?(products.find(p=>String(p.id)===String(id))?.active!==false):true,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
   try{
