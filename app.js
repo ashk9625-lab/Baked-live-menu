@@ -802,11 +802,18 @@ async function saveProduct(e){
   $('#productFormMessage').textContent='Saving…';
   try{
     await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
-    if(id&&currentStrains.length){
-      for(const s of currentStrains){
-        await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strain_name:s.name,p_stock:s.qty})});
+    if(id){
+      const requestedStock=Math.max(0,Number($('#productStock').value)||0);
+      if(requestedStock===0){
+        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:0})});
+      }else if(currentStrains.length){
+        for(const s of currentStrains){
+          await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strain_name:s.name,p_stock:s.qty})});
+        }
+        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:currentStrains.reduce((n,s)=>n+s.qty,0)})});
+      }else{
+        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:requestedStock})});
       }
-      await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:currentStrains.reduce((n,s)=>n+s.qty,0)})});
     }
     closeOverlays(); toast(id?'Product and '+accountCode+' stock updated':'Product added');
     await Promise.all([loadAdminProducts(),loadCustomerStock(),loadFastStock(),loadProducts()]);
