@@ -793,9 +793,23 @@ function openProductModal(p=null){
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
-  e.preventDefault(); const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:id?(products.find(p=>String(p.id)===String(id))?.active!==false):true,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
+  e.preventDefault();
+  const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains);
+  const id=$('#productId').value;
+  const accountCode=$('#customerStockAccount')?.value||((customerAccountName||'').toUpperCase().includes('CUSTOMER')?'CUSTOMER':'NSFT');
+  const payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:id?(products.find(p=>String(p.id)===String(id))?.active!==false):true,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
-  try{ await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)}); closeOverlays(); toast(id?'Product updated':'Product added'); await Promise.all([loadAdminProducts(),loadProducts()]); }catch(err){ $('#productFormMessage').textContent=err.message; }
+  try{
+    await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
+    if(id&&currentStrains.length){
+      for(const s of currentStrains){
+        await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strain_name:s.name,p_stock:s.qty})});
+      }
+      await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:currentStrains.reduce((n,s)=>n+s.qty,0)})});
+    }
+    closeOverlays(); toast(id?'Product and '+accountCode+' stock updated':'Product added');
+    await Promise.all([loadAdminProducts(),loadCustomerStock(),loadFastStock(),loadProducts()]);
+  }catch(err){ $('#productFormMessage').textContent=err.message; }
 }
 function openStockModal(id,name){ $('#stockProductId').value=id;$('#stockProductName').textContent=name;$('#stockForm').reset();$('#stockModal').classList.remove('hidden');$('#drawerBackdrop').classList.remove('hidden');$('#stockFormMessage').textContent=''; }
 async function adjustStock(e){
