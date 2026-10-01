@@ -55,7 +55,7 @@ const stockState = (p) => p.stock <= 0 ? ['out','Out of stock'] : p.stock <= p.r
 const headers = (auth=false) => ({apikey:SUPABASE_KEY,Authorization:`Bearer ${auth && accessToken ? accessToken : SUPABASE_KEY}`,'Content-Type':'application/json'});
 
 async function api(path, options={}) {
-  const response = await fetch(`${SUPABASE_URL}${path}`, {...options, headers:{...headers(options.auth),...(options.headers||{})}});
+  const response = await fetch(`${SUPABASE_URL}${path}`, {...options, cache:'no-store', headers:{...headers(options.auth),'Cache-Control':'no-cache',...(options.headers||{})}});
   if (!response.ok) {
     const body = await response.text();
     let msg = `Request failed (${response.status})`;
