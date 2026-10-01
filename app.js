@@ -445,6 +445,8 @@ async function loadProducts(){
       data=(master||[]).map(p=>({...p,stock:String(p.category||'').trim().toLowerCase()==='edibles'?(sharedMap.get(p.id)||0):(ownMap.get(p.id)||0)}));
     }
     products=Array.isArray(data)?data:[];
+    // Never let an old zero-stock response override newly added strain stock.
+    // The customer_menu RPC is the authoritative account-specific source.
     hideCustomerGate();
     $('#status').textContent=data.length?'Connected to live inventory':'No products are currently available';
   }catch(e){
