@@ -1153,7 +1153,7 @@ function renderCustomerStock(){
   box.innerHTML=rows.length?rows.map(p=>`<div class="fast-stock-row"><span><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'')}</small></span><div><small>Current ${p.customer_stock}</small><input class="customer-stock-input" data-product="${p.id}" type="number" min="0" step="1" value="${p.customer_stock}" inputmode="numeric"></div></div>`).join(''):'<div class="empty-state"><p>No products found.</p></div>';
 }
 async function saveCustomerStock(){
-  const code=$('#customerStockAccount')?.value||'CUSTOMER',inputs=$$('.customer-stock-input'),btn=$('#saveCustomerStockButton'),msg=$('#customerStockMessage');
+  const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER',inputs=$('.customer-stock-input'),btn=$('#saveCustomerStockButton'),msg=$('#customerStockMessage');
   btn.disabled=true;msg.textContent='Saving '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
   let saved=0;
   try{
@@ -1186,7 +1186,7 @@ function renderFastStock(){
 }
 async function loadFastStock(){
   try{
-    const code=$('#customerStockAccount')?.value||'CUSTOMER';
+    const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER';
     const [ps,inv]=await Promise.all([
       api('/rest/v1/products?select=id,sku,name,category,description&order=name.asc',{auth:true}),
       api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:code})})
@@ -1204,8 +1204,8 @@ async function loadFastStock(){
   }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function saveFastStock(){
-  const code=$('#customerStockAccount')?.value||'CUSTOMER';
-  const inputs=$$('.fast-stock-input');
+  const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER';
+  const inputs=$('.fast-stock-input');
   const changes=[];
   inputs.forEach(input=>{
     const p=fastStockProducts.find(x=>String(x.id)===String(input.dataset.product));if(!p)return;
