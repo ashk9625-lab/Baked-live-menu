@@ -350,7 +350,7 @@
       <div class="modal-head"><h2 id="productModalTitle">Add product</h2><button class="icon-button" data-close="productModal">×</button></div>
       <form id="productForm" class="form-grid">
         <input id="productId" type="hidden">
-        <label class="full"><strong>Stock account</strong><select id="productStockAccount"><option value="NSFT">NSFT</option><option value="CUSTOMER">Customer</option></select><small class="field-help">Strain quantities entered below are saved only to this account. Edibles remain shared.</small></label>
+        <input id="productStockAccount" type="hidden" value="NSFT">
         <label>Product name<input id="productName" required></label>
         <label>SKU<input id="productSku" required></label>
         <label>Category<input id="productCategory" required placeholder="Pre-Rolls, Flower, Dab, Edibles, Oils & Capsules, Vapes"></label>
