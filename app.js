@@ -787,18 +787,48 @@ async function deleteProduct(id,name,button,sku=''){
   }
 }
 
-function openProductModal(p=null){
+async function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product';
-  const stockAccount=$('#productStockAccount');if(stockAccount)stockAccount.value=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT'; $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
-  if(p){ const parts=splitProductDescription(p.description); $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=p.stock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured; }
-  renderProductStrainManager(p?parseStrainList(p.description):[]);
+  const accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
+  const stockAccount=$('#productStockAccount');if(stockAccount)stockAccount.value=accountCode;
+  $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
+  let accountStock=Number(p?.stock||0), accountStrains=[];
+  if(p){
+    try{
+      const [inv,strainInv]=await Promise.all([
+        api('/rest/v1/rpc/admin_customer_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})}),
+        api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})})
+      ]);
+      const row=(inv||[]).find(x=>String(x.product_id)===String(p.id));
+      if(row)accountStock=Number(row.stock||0);
+      accountStrains=(strainInv||[]).filter(x=>String(x.product_id)===String(p.id)&&Number(x.stock||0)>0).map(x=>({name:x.strain_name,qty:Number(x.stock||0)}));
+    }catch(err){console.warn('Could not load account product stock',err);}
+    const parts=splitProductDescription(p.description);
+    $('#productName').value=p.name;$('#productSku').value=p.sku;$('#productCategory').value=p.category;$('#productGroup').value=p.group_name;$('#productStrength').value=p.strength||'';$('#productPrice').value=p.price;$('#productStock').value=accountStock;$('#productReorder').value=p.reorder_level;$('#productImage').value=p.image_url||'';$('#productDescription').value=parts.description;$('#productActive').checked=p.active;$('#productFeatured').checked=!!p.featured;
+  }
+  renderProductStrainManager(p?accountStrains:[]);
   refreshProductSavedStrainSelect();
   $('#productModal').classList.remove('hidden'); $('#drawerBackdrop').classList.remove('hidden'); $('#productFormMessage').textContent='';
 }
 async function saveProduct(e){
-  e.preventDefault(); const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains); const id=$('#productId').value, payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:Number($('#productStock').value),reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:id?(products.find(p=>String(p.id)===String(id))?.active!==false):true,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
+  e.preventDefault();
+  const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains);
+  const id=$('#productId').value, accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
+  const requestedStock=Math.max(0,Number($('#productStock').value)||0);
+  const payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:requestedStock,reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:id?(products.find(p=>String(p.id)===String(id))?.active!==false):true,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
-  try{ await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)}); closeOverlays(); toast(id?'Product updated':'Product added'); await Promise.all([loadAdminProducts(),loadProducts()]); }catch(err){ $('#productFormMessage').textContent=err.message; }
+  try{
+    await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
+    if(id){
+      if(currentStrains.length){
+        await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:currentStrains.map(s=>({strain_name:s.name,stock:s.qty}))})});
+      }else{
+        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:requestedStock})});
+      }
+    }
+    closeOverlays(); toast(id?'Product updated':'Product added');
+    await Promise.all([loadAdminProducts(),loadCustomerStock(),loadFastStock(),loadProducts()]);
+  }catch(err){ $('#productFormMessage').textContent=err.message; }
 }
 function openStockModal(id,name){ $('#stockProductId').value=id;$('#stockProductName').textContent=name;$('#stockForm').reset();$('#stockModal').classList.remove('hidden');$('#drawerBackdrop').classList.remove('hidden');$('#stockFormMessage').textContent=''; }
 async function adjustStock(e){
