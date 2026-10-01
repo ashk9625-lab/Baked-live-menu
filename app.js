@@ -1132,7 +1132,7 @@ async function removeAdmin(id,email){
 
 let customerStockProducts=[];
 async function loadCustomerStock(){
-  const code=$('#customerStockAccount')?.value||'CUSTOMER',box=$('#customerStockList'),msg=$('#customerStockMessage');
+  const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER',box=$('#customerStockList'),msg=$('#customerStockMessage');
   if(!box)return;
   if(msg)msg.textContent='Loading '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
   try{
