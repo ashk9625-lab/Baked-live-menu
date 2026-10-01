@@ -809,10 +809,7 @@ async function saveProduct(e){
       if(requestedStock===0){
         await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:0})});
       }else if(currentStrains.length){
-        for(const s of currentStrains){
-          await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strain_name:s.name,p_stock:s.qty})});
-        }
-        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:currentStrains.reduce((n,s)=>n+s.qty,0)})});
+        await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:currentStrains.map(s=>({strain_name:s.name,stock:s.qty}))})});
       }else{
         await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:requestedStock})});
       }
