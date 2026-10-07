@@ -283,7 +283,7 @@ function renderProductStrainManager(strains=[]){
 }
 function openStrainModal(id){
   const p=products.find(x=>String(x.id)===String(id)); if(!p)return;
-  const strains=parseStrainList(p.description);
+  const strains=parseStrainList(p.description).map(s=>({...s,qty:Math.max(0,Number(s.qty||0)-cartReservedForStrain(p.id,s.name))}));
   if(!strains.length)return;
   $('#strainModalTitle').textContent=p.name;
   $('#strainModalSubtitle').textContent='Choose a strain and quantity';
@@ -315,6 +315,7 @@ function addStrainToCart(p,strain,requestedQuantity=1){
   if(item)item.quantity+=amount;
   else cart.push({id:p.id,cartKey:key,name:`${p.name} — ${strain.name}`,parentName:p.name,strain:strain.name,price:Number(p.price),quantity:amount,stock:strain.qty});
   persistCart();
+  renderProducts(); renderFeaturedProducts();
   toast(`${amount} × ${strain.name} added to cart`);
 }
 
@@ -404,6 +405,12 @@ function sortLiveProducts(list){
   });
 }
 
+function cartReservedForProduct(productId){
+  return cart.filter(i=>String(i.id)===String(productId)).reduce((sum,i)=>sum+Number(i.quantity||0),0);
+}
+function cartReservedForStrain(productId,strainName){
+  return cart.filter(i=>String(i.id)===String(productId)&&String(i.strain||'').toLowerCase()===String(strainName||'').toLowerCase()).reduce((sum,i)=>sum+Number(i.quantity||0),0);
+}
 function renderProducts(){
   const term=$('#searchInput').value.trim().toLowerCase(), cat=$('#categoryFilter').value, filter=$('#stockFilter').value;
   const shown=sortLiveProducts(products.filter(p=>{
@@ -413,7 +420,7 @@ function renderProducts(){
   $('#status').textContent=activeVaultFilter==='all'?`Showing ${shown.length} of ${products.length} products`:`${vaultLabels[activeVaultFilter]} · ${shown.length} products`;
   $('#productGrid').innerHTML=shown.length?shown.map(p=>{
     const strains=parseStrainList(p.description);
-    const availableStock=strains.length?strains.reduce((sum,s)=>sum+Number(s.qty||0),0):Number(p.stock||0);
+    const availableStock=strains.length?strains.reduce((sum,s)=>sum+Math.max(0,Number(s.qty||0)-cartReservedForStrain(p.id,s.name)),0):Math.max(0,Number(p.stock||0)-cartReservedForProduct(p.id));
     const effectiveProduct={...p,stock:availableStock};
     const [state,label]=stockState(effectiveProduct), img=p.image_url?`<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy">`:`<div class="placeholder">${initials(p.name)}</div>`;
     const strainSummary=strains.length?`<button type="button" class="view-strains" data-id="${p.id}"><span>View ${strains.length} strain${strains.length===1?'':'s'}</span><strong>Open →</strong></button>`:`<p>${escapeHtml(splitProductDescription(p.description).description||'Current live menu item.')}</p>`;
@@ -472,12 +479,13 @@ function addToCart(id,requestedQuantity=1){
   if(existing+amount>p.stock)return toast(`Only ${p.stock-existing} more available`);
   if(item)item.quantity+=amount;
   else cart.push({id:p.id,name:p.name,price:Number(p.price),quantity:amount,stock:p.stock});
-  persistCart(); toast(`${amount} × ${p.name} added to cart`);
+  persistCart(); renderProducts(); renderFeaturedProducts(); toast(`${amount} × ${p.name} added to cart`);
 }
 function removeCartItem(key){
   cart=cart.filter(x=>String(x.cartKey||x.id)!==String(key));
   localStorage.setItem('baked-cart',JSON.stringify(cart));
   updateCart();
+  renderProducts(); renderFeaturedProducts();
   toast('Item removed from cart');
 }
 function setCartQty(key,value){
@@ -489,6 +497,7 @@ function setCartQty(key,value){
   item.quantity=qty;
   localStorage.setItem('baked-cart',JSON.stringify(cart));
   updateCart();
+  renderProducts(); renderFeaturedProducts();
 }
 function updateCart(){
   const count=cart.reduce((a,b)=>a+b.quantity,0);
