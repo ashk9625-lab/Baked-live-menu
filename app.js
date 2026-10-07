@@ -728,7 +728,26 @@ async function claimAdmin(){
 }
 function logout(){ accessToken=''; localStorage.removeItem('baked-access-token'); $('#adminLogin').classList.remove('hidden'); $('#adminDashboard').classList.add('hidden'); $('#loginMessage').textContent=''; }
 async function loadAdminProducts(){
-  try{ const data=await api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc',{auth:true}); renderAdminProducts(data); }catch(err){ $('#adminProducts').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; }
+  try{
+    const accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
+    const [data,inv,strainInv]=await Promise.all([
+      api('/rest/v1/products?select=*&active=eq.true&order=group_name.asc,name.asc',{auth:true}),
+      api('/rest/v1/rpc/admin_customer_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})}),
+      api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})})
+    ]);
+    const invMap=new Map((inv||[]).map(x=>[String(x.product_id),Number(x.stock||0)]));
+    const strainTotals=new Map();
+    (strainInv||[]).forEach(x=>{
+      const key=String(x.product_id);
+      strainTotals.set(key,(strainTotals.get(key)||0)+Math.max(0,Number(x.stock||0)));
+    });
+    const live=(data||[]).map(p=>{
+      const key=String(p.id);
+      const stock=strainTotals.has(key)?strainTotals.get(key):(invMap.has(key)?invMap.get(key):0);
+      return {...p,stock};
+    });
+    renderAdminProducts(live);
+  }catch(err){ $('#adminProducts').innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`; }
 }
 function renderAdminProducts(data){
   const ordered=sortLiveProducts(data);
