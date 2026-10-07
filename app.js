@@ -852,10 +852,12 @@ async function saveProduct(e){
   try{
     await api(`/rest/v1/products${id?`?id=eq.${id}`:''}`,{method:id?'PATCH':'POST',auth:true,headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
     if(id){
-      if(currentStrains.length){
-        await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:currentStrains.map(s=>({strain_name:s.name,stock:s.qty}))})});
-      }else{
-        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:requestedStock})});
+      // Always replace the complete strain inventory, even when the list is empty.
+      // Removing a strain therefore removes/zeros its old stock instead of leaving stale units behind.
+      await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:currentStrains.map(s=>({strain_name:s.name,stock:s.qty}))})});
+      if(!currentStrains.length){
+        // A strain-managed product with every strain removed must become unavailable.
+        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:0})});
       }
     }
     closeOverlays(); toast(id?'Product updated':'Product added');
