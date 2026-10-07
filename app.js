@@ -846,6 +846,14 @@ async function saveProduct(e){
   e.preventDefault();
   const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains);
   const id=$('#productId').value, accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
+  // Capture the complete pre-save strain inventory so removed strains can be explicitly zeroed.
+  let previousStrains=[];
+  if(id){
+    try{
+      const before=await api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})});
+      previousStrains=(before||[]).filter(x=>String(x.product_id)===String(id)).map(x=>({name:String(x.strain_name||'').trim(),qty:Number(x.stock||0)}));
+    }catch(err){console.warn('Could not capture previous strain inventory',err);}
+  }
   const requestedStock=Math.max(0,Number($('#productStock').value)||0);
   const payload={name:$('#productName').value.trim(),sku:$('#productSku').value.trim(),category:$('#productCategory').value.trim(),group_name:$('#productGroup').value.trim(),strength:$('#productStrength').value.trim(),price:Number($('#productPrice').value),stock:requestedStock,reorder_level:Number($('#productReorder').value),image_url:$('#productImage').value.trim()||null,description:composeProductDescription($('#productDescription').value,$('#productStrains').value),active:id?(products.find(p=>String(p.id)===String(id))?.active!==false):true,featured:$('#productFeatured').checked,updated_at:new Date().toISOString()};
   $('#productFormMessage').textContent='Saving…';
@@ -854,7 +862,18 @@ async function saveProduct(e){
     if(id){
       // Always replace the complete strain inventory, even when the list is empty.
       // Removing a strain therefore removes/zeros its old stock instead of leaving stale units behind.
-      await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:currentStrains.map(s=>({strain_name:s.name,stock:s.qty}))})});
+      const currentNames=new Set(currentStrains.map(s=>String(s.name).trim().toLowerCase()));
+      const removedStrains=previousStrains.filter(s=>s.name&&!currentNames.has(s.name.toLowerCase()));
+      // Include removed strains at stock 0 because older DB versions may upsert replacements
+      // without deleting rows omitted from the payload.
+      const replacement=[
+        ...currentStrains.map(s=>({strain_name:s.name,stock:s.qty})),
+        ...removedStrains.map(s=>({strain_name:s.name,stock:0}))
+      ];
+      await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:replacement})});
+      // Keep the top-level account stock synchronized with the exact live strain total.
+      const liveTotal=currentStrains.reduce((sum,s)=>sum+Math.max(0,Number(s.qty||0)),0);
+      await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:liveTotal})});
       if(!currentStrains.length){
         // A strain-managed product with every strain removed must become unavailable.
         await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:0})});
