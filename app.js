@@ -736,14 +736,18 @@ async function loadAdminProducts(){
       api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})})
     ]);
     const invMap=new Map((inv||[]).map(x=>[String(x.product_id),Number(x.stock||0)]));
-    const strainTotals=new Map();
+    const strainTotals=new Map(), strainProducts=new Set();
     (strainInv||[]).forEach(x=>{
       const key=String(x.product_id);
+      strainProducts.add(key);
       strainTotals.set(key,(strainTotals.get(key)||0)+Math.max(0,Number(x.stock||0)));
     });
     const live=(data||[]).map(p=>{
       const key=String(p.id);
-      const stock=strainTotals.has(key)?strainTotals.get(key):(invMap.has(key)?invMap.get(key):0);
+      // If this product is strain-managed, the strain inventory is authoritative,
+      // including a genuine zero. Never fall back to a stale top-level quantity.
+      const hasStrainCatalogue=parseStrainList(p.description).length>0;
+      const stock=(strainProducts.has(key)||hasStrainCatalogue)?(strainTotals.get(key)||0):(invMap.get(key)||0);
       return {...p,stock};
     });
     renderAdminProducts(live);
