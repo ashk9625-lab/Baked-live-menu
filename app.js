@@ -1862,9 +1862,14 @@ async function recognizeBoxLabel(file){
   const qty=manualQtyText?manualQty:uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
-  const typeTokens=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1|!]\s*\)/g,'(I)').match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
-  const types=[...new Set(typeTokens.map(t=>{const x=t.replace(/[^A-Z]/gi,'').toUpperCase();return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;}))];
-  if(types.length!==1)throw Error('S/I/H not recognised. See the camera-read text below; no stock was changed.');
+  // Recognise bracketed type codes even when OCR uses 1, !, | for I.
+  const typeSource=raw.replace(/[\\[\\{]/g,'(').replace(/[\\]\\}]/g,')').replace(/\\(\\s*[1!|L]\\s*\\)/gi,'(I)');
+  const typeTokens=typeSource.match(/\\(\\s*[SIH]\\s*\\)|\\b(?:SATIVA|INDICA|HYBRID)\\b/gi)||[];
+  const types=[...new Set(typeTokens.map(t=>{
+    const x=t.replace(/[^A-Z]/gi,'').toUpperCase();
+    return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;
+  }))];
+  if(types.length!==1)throw Error('Strain type (H), (S), or (I) not recognised uniquely. Camera read: '+raw.trim()+'. No stock was changed.');
   const recognizedType=types[0];
   const [ps,inventory]=await Promise.all([
     api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
