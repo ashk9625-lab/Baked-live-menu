@@ -1849,7 +1849,15 @@ async function recognizeBoxLabel(file){
   const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
   const ocr=await Tesseract.recognize(canvas,'eng');
-  const raw=String(ocr.data.text||'').toUpperCase().replace(/[×✕]/g,'X');
+  const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
+  for(let i=0;i<pixels.data.length;i+=4){
+    const gray=.299*pixels.data[i]+.587*pixels.data[i+1]+.114*pixels.data[i+2];
+    const v=gray>155?255:0;
+    pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=v;
+  }
+  ctx.putImageData(pixels,0,0);
+  const enhanced=await Tesseract.recognize(canvas,'eng');
+  const raw=[String(ocr.data.text||''),String(enhanced.data.text||'')].join('\\n').toUpperCase().replace(/[×✕]/g,'X');
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   // Printed labels often join X20 directly to the strain/type with no space.
   // A word boundary before X incorrectly rejects e.g. CHEESE(I)X20 or CHEESEX20.
