@@ -1863,8 +1863,8 @@ async function recognizeBoxLabel(file){
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
   // Recognise bracketed type codes even when OCR uses 1, !, | for I.
-  const typeSource=raw.replace(/[\\[\\{]/g,'(').replace(/[\\]\\}]/g,')').replace(/\\(\\s*[1!|L]\\s*\\)/gi,'(I)');
-  const typeTokens=typeSource.match(/\\(\\s*[SIH]\\s*\\)|\\b(?:SATIVA|INDICA|HYBRID)\\b/gi)||[];
+  const typeSource=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1!|L]\s*\)/gi,'(I)');
+  const typeTokens=typeSource.match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
   const types=[...new Set(typeTokens.map(t=>{
     const x=t.replace(/[^A-Z]/gi,'').toUpperCase();
     return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;
@@ -1875,7 +1875,7 @@ async function recognizeBoxLabel(file){
     api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
     api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
   ]);
-  const cleaned=normalizedLabel(raw.replace(/X\\s*\\d{1,4}/gi,' ').replace(/\\(\\s*[SIH1|!]\\s*\\)/gi,' '));
+  const cleaned=normalizedLabel(raw.replace(/X\s*\d{1,4}/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' '));
   const candidates=[];
   for(const p of ps||[]){
     const productName=normalizedLabel(p.name);
@@ -1885,13 +1885,13 @@ async function recognizeBoxLabel(file){
       ...(inventory||[]).filter(x=>String(x.product_id)===String(p.id)).map(x=>x.strain_name)
     ]);
     for(const strain of names){
-      const sm=String(strain).match(/\\(\\s*([SIH])\\s*\\)/i);
+      const sm=String(strain).match(/\(\s*([SIH])\s*\)/i);
       if(sm&&sm[1].toUpperCase()!==recognizedType)continue;
-      const base=normalizedLabel(String(strain).replace(/\\(\\s*[SIH]\\s*\\)/gi,''));
+      const base=normalizedLabel(String(strain).replace(/\(\s*[SIH]\s*\)/gi,''));
       if(!base||!cleaned.includes(base))continue;
       const invRow=(inventory||[]).find(x=>String(x.product_id)===String(p.id)&&normalizedLabel(x.strain_name)===normalizedLabel(strain));
       if(!invRow)continue;
-      const actualType=String(invRow.strain_name).match(/\\(\\s*([SIH])\\s*\\)/i);
+      const actualType=String(invRow.strain_name).match(/\(\s*([SIH])\s*\)/i);
       if(actualType&&actualType[1].toUpperCase()!==recognizedType)continue;
       if(!candidates.some(x=>String(x.p.id)===String(p.id)&&x.s.name===invRow.strain_name))
         candidates.push({p,s:{name:invRow.strain_name},qty});
