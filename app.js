@@ -1832,16 +1832,19 @@ async function recognizeBoxLabel(file){
   if(qtyMatches.length!==1)throw Error('Could not read one clear X quantity. Retake the photo.');
   const qty=Number(qtyMatches[0][1]||qtyMatches[0][2]);
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
-  const typeMatch=raw.match(/\(([SIH])\)/);
-  if(!typeMatch)throw Error('Sativa/Indica/Hybrid letter was not recognised. Retake the photo.');
+  // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
+  const typeTokens=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1|!]\s*\)/g,'(I)').match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
+  const types=[...new Set(typeTokens.map(t=>{const x=t.replace(/[^A-Z]/gi,'').toUpperCase();return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;}))];
+  if(types.length!==1)throw Error('Cannot identify one clear S, I or H on the label. Retake the photo.');
+  const recognizedType=types[0];
   const ps=await api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true});
-  const cleaned=normalizedLabel(raw.replace(/\bX\s*\d+\b|\b\d+\s*X\b/g,' ').replace(/\([SIH]\)/g,' '));
+  const cleaned=normalizedLabel(raw.replace(/\bX\s*\d+\b|\b\d+\s*X\b/g,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' '));
   const candidates=[];
   for(const p of ps||[]){
    if(!normalizedLabel(p.name)||!cleaned.includes(normalizedLabel(p.name)))continue;
    for(const s of parseStrainList(p.description)){
     const sm=String(s.name).match(/\(([SIH])\)/i);
-    if(!sm||sm[1].toUpperCase()!==typeMatch[1])continue;
+    if(!sm||sm[1].toUpperCase()!==recognizedType)continue;
     const name=normalizedLabel(s.name.replace(/\([SIH]\)/gi,''));
     if(name&&cleaned.includes(name))candidates.push({p,s,qty});
    }
