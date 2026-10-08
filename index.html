@@ -171,6 +171,7 @@
  <h3>📷 Camera Label Recognition</h3><p class="admin-help">Read the existing 40 × 30 mm box sticker with an Android phone. Review the exact match before adding stock. Account comes from your Live Menu login.</p>
  <input type="file" id="labelPhoto" accept="image/*" capture="environment" style="width:100%;margin:12px 0">
  <p id="labelRecognitionStatus" class="form-message">Take a clear photo of the sticker.</p>
+ <label for="labelQuantityOverride" style="display:block;margin:10px 0 4px">Box quantity (only enter if camera reads it incorrectly)</label><input id="labelQuantityOverride" type="number" min="1" max="1000" step="1" inputmode="numeric" placeholder="e.g. 20" style="width:100%;max-width:180px;margin-bottom:10px">
  <div id="labelRecognitionPreview"></div>
  <button id="labelConfirmStock" type="button" class="btn primary" disabled>Confirm &amp; Add Stock</button>
 </div><div class="inventory-divider"></div>
