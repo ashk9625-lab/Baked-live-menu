@@ -1852,7 +1852,7 @@ async function recognizeBoxLabel(file){
   const reads=[String(ocr.data.text||'')];
   // When a distant sticker is small in the frame, retry a central crop at
   // original pixel resolution rather than increasing the camera zoom.
-  if(!/(?:^|[^A-Z])X[\\s:;=.\\-]*[0-9O]{1,4}/im.test(reads[0])){
+  if(!/(?:^|[^A-Z])X[\s:;=.\-]*[0-9O]{1,4}/im.test(reads[0])){
    const crop=document.createElement('canvas');
    const sx=Math.round(canvas.width*.18),sy=Math.round(canvas.height*.12);
    const sw=Math.round(canvas.width*.64),sh=Math.round(canvas.height*.76);
