@@ -1896,7 +1896,7 @@ async function recognizeBoxLabel(file){
     }
   }
   if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
-  labelMatch={...candidates[0],account:customerAccountCode,raw};
+  labelMatch={...candidates[0],account:customerAccountCode,sessionToken:customerSessionToken,raw};
   preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
   status.textContent='Exact label match found. Adding stock…';
   await confirmBoxLabelStock();
@@ -1905,7 +1905,8 @@ async function recognizeBoxLabel(file){
 async function confirmBoxLabelStock(){
  if(!labelMatch||labelBusy)return;
  const {p,s,qty,account}=labelMatch,status=$('#labelRecognitionStatus'),btn=$('#labelConfirmStock');
- if(!customerSessionToken||customerAccountCode!==account){status.textContent='Account changed. Scan again.';return;}
+ const sessionAtScan=labelMatch.sessionToken;
+ if(!sessionAtScan||!customerSessionToken||sessionAtScan!==customerSessionToken||selectedStockAccount()!==account){status.textContent='Login changed. Scan again; no stock added.';return;}
  labelBusy=true;btn.disabled=true;
  try{
   const inv=await api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:account})});
@@ -1913,6 +1914,7 @@ async function confirmBoxLabelStock(){
   if(!row)throw Error('Strain stock record not found; no stock was changed.');
   const old=Number(row.stock);
   if(!Number.isSafeInteger(old)||old<0)throw Error('Cannot verify existing stock.');
+  if(customerSessionToken!==sessionAtScan||selectedStockAccount()!==account)throw Error('Account changed before saving. No stock added.');
   await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:account,p_product_id:p.id,p_strain_name:s.name,p_stock:old+qty})});
   status.textContent='Added '+qty+' to '+account+' — '+p.name+' / '+s.name+'. New stock: '+(old+qty)+'.';
   labelMatch=null;$('#labelPhoto').value='';if($('#labelQuantityOverride'))$('#labelQuantityOverride').value='';if($('#labelTypeOverride'))$('#labelTypeOverride').value='';$('#labelRecognitionPreview').textContent='';
