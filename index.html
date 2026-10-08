@@ -25,7 +25,7 @@
       <span class="live-pill"><i></i> Live stock</span>
       <button id="surpriseButton" class="btn surprise-header compact">🎲 Surprise Me</button>
       <button id="adminButton" class="btn ghost compact">Admin</button>
-      <button id="refreshMenuButton" class="btn ghost compact hidden" type="button" aria-label="Refresh live menu">↻ Refresh</button>
+      
       <button id="customerLogoutButton" class="btn ghost compact hidden" type="button">Log Out</button>
       <button id="cartButton" class="cart-button" aria-label="Open cart">Cart <span id="cartCount">0</span></button>
     </div>
@@ -72,6 +72,7 @@
         <label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="Search products"></label>
         <select id="categoryFilter"><option value="all">All categories</option></select>
         <select id="stockFilter"><option value="all">All availability</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
+        <button id="refreshMenuButton" class="btn primary" type="button" style="min-height:44px;white-space:nowrap;flex-shrink:0" aria-label="Refresh available stock">↻ Refresh Stock</button>
       </section>
 
       <section id="featuredSection" class="featured-section hidden"><div class="section-heading"><div><p class="eyebrow accent">FEATURED</p><h2>Featured products</h2></div></div><div id="featuredGrid" class="product-grid featured-grid"></div></section>
