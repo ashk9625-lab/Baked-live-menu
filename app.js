@@ -1850,6 +1850,17 @@ async function recognizeBoxLabel(file){
   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
   const ocr=await Tesseract.recognize(canvas,'eng');
   const reads=[String(ocr.data.text||'')];
+  // When a distant sticker is small in the frame, retry a central crop at
+  // original pixel resolution rather than increasing the camera zoom.
+  if(!/(?:^|[^A-Z])X[\\s:;=.\\-]*[0-9O]{1,4}/im.test(reads[0])){
+   const crop=document.createElement('canvas');
+   const sx=Math.round(canvas.width*.18),sy=Math.round(canvas.height*.12);
+   const sw=Math.round(canvas.width*.64),sh=Math.round(canvas.height*.76);
+   crop.width=sw;crop.height=sh;
+   crop.getContext('2d').drawImage(canvas,sx,sy,sw,sh,0,0,sw,sh);
+   const focused=await Tesseract.recognize(crop,'eng');
+   reads.push(String(focused.data.text||''));
+  }
   const raw=reads.join('\n').toUpperCase().replace(/[×✕]/g,'X');
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   // Read X20, X 20, X2O, X:20 and OCR's multiplication glyphs.
@@ -1954,7 +1965,7 @@ let labelDigitalZoom=1;
 let labelZoomRequest=0;
 async function setLabelCameraZoom(requested){
  const request=++labelZoomRequest;
- const zoom=Math.max(1,Math.min(6,Number(requested)||1));
+ const zoom=Math.max(1,Math.min(3,Number(requested)||1));
  const video=$('#labelCameraVideo');
  const track=labelCameraStream?.getVideoTracks()[0];
  if(!track)return;
@@ -1971,8 +1982,6 @@ async function setLabelCameraZoom(requested){
  labelDigitalZoom=Math.max(1,zoom/hardware);
  video.style.transform=labelDigitalZoom>1?'scale('+labelDigitalZoom+')':'none';
  video.parentElement.style.overflow='hidden';
- const slider=$('#labelZoomSlider');if(slider)slider.value=String(zoom);
- const value=$('#labelZoomValue');if(value)value.textContent=zoom+'×';
  document.querySelectorAll('.label-zoom').forEach(b=>{b.disabled=Number(b.dataset.zoom)===zoom;});
 }
 function closeLabelCamera(){
@@ -1997,7 +2006,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   }catch(e){closeLabelCamera();$('#labelRecognitionStatus').textContent=e.message||'Camera unavailable. Use photo option.';}
  };
  document.querySelectorAll('.label-zoom').forEach(b=>b.onclick=()=>setLabelCameraZoom(Number(b.dataset.zoom)));
- const slider=$('#labelZoomSlider');if(slider)slider.oninput=()=>setLabelCameraZoom(Number(slider.value));
  if(close)close.onclick=closeLabelCamera;
  if(capture)capture.onclick=async()=>{
   const video=$('#labelCameraVideo');
