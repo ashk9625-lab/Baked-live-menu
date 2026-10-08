@@ -747,7 +747,8 @@ async function loadAdminProducts(){
       // If this product is strain-managed, the strain inventory is authoritative,
       // including a genuine zero. Never fall back to a stale top-level quantity.
       const hasStrainCatalogue=parseStrainList(p.description).length>0;
-      const stock=(strainProducts.has(key)||hasStrainCatalogue)?(strainTotals.get(key)||0):(invMap.get(key)||0);
+      const isEdible=String(p.category||'').trim().toLowerCase()==='edibles';
+      const stock=(!isEdible&&(strainProducts.has(key)||hasStrainCatalogue))?(strainTotals.get(key)||0):(invMap.get(key)||0);
       return {...p,stock};
     });
     renderAdminProducts(live);
