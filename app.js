@@ -1845,29 +1845,11 @@ async function recognizeBoxLabel(file){
  status.textContent='Reading sticker…';
  try{
   const bitmap=await createImageBitmap(file);
-  const scale=Math.max(1,Math.min(4,1800/Math.max(bitmap.width,bitmap.height)));
+  const scale=Math.max(1,Math.min(2,1200/Math.max(bitmap.width,bitmap.height)));
   const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
   const ocr=await Tesseract.recognize(canvas,'eng');
   const reads=[String(ocr.data.text||'')];
-  if(!/\bX\s*[0-9O]{1,4}\b/i.test(reads[0])||!/\(\s*[HSI1]\s*\)/i.test(reads[0])){
-  const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
-  for(let i=0;i<pixels.data.length;i+=4){
-    const gray=.299*pixels.data[i]+.587*pixels.data[i+1]+.114*pixels.data[i+2];
-    const v=gray>155?255:0;
-    pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=v;
-  }
-  ctx.putImageData(pixels,0,0);
-  const enhanced=await Tesseract.recognize(canvas,'eng');
-  // A third OCR pass targets the lower label area where the printed X20 sits.
-  // Keep passes separate so an OCR mistake in one does not get concatenated into a quantity.
-  const lower=document.createElement('canvas');
-  lower.width=canvas.width;
-  lower.height=Math.round(canvas.height*.52);
-  lower.getContext('2d').drawImage(canvas,0,Math.round(canvas.height*.48),canvas.width,lower.height,0,0,lower.width,lower.height);
-  const lowerRead=await Tesseract.recognize(lower,'eng');
-  reads.push(String(enhanced.data.text||''),String(lowerRead.data.text||''));
-  }
   const raw=reads.join('\n').toUpperCase().replace(/[×✕]/g,'X');
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   // Read X20, X 20, X2O, X:20 and OCR's multiplication glyphs.
@@ -1881,32 +1863,6 @@ async function recognizeBoxLabel(file){
         const n=Number((hit[1]||hit[2]).replace(/O/g,'0'));
         if(Number.isSafeInteger(n)&&n>=1&&n<=1000)qtyCandidates.push(n);
       }
-    }
-  }
-  // If the general OCR misses the quantity, retry the sticker region using
-  // a single-line recognition mode and a character whitelist.
-  if(!qtyCandidates.length){
-    status.textContent='Checking quantity more closely…';
-    const regions=[
-      [0,0,1,1],
-      [0,.35,1,.65],
-      [0,0,1,.65]
-    ];
-    for(const [x,y,w,h] of regions){
-      const crop=document.createElement('canvas');
-      crop.width=Math.round(canvas.width*w);
-      crop.height=Math.round(canvas.height*h);
-      crop.getContext('2d').drawImage(canvas,Math.round(canvas.width*x),Math.round(canvas.height*y),crop.width,crop.height,0,0,crop.width,crop.height);
-      const attempt=await Tesseract.recognize(crop,'eng',{tessedit_pageseg_mode:6});
-      const lines=String(attempt.data.text||'').toUpperCase().replace(/[×✕✖]/g,'X').split(/\r?\n/);
-      reads.push(attempt.data.text||'');
-      for(const line of lines){
-        for(const hit of line.matchAll(/(?:^|[^A-Z])X[\s:;=.\-]*([0-9O]{1,4})(?![0-9A-Z])/g)){
-          const n=Number(hit[1].replace(/O/g,'0'));
-          if(Number.isSafeInteger(n)&&n>=1&&n<=1000)qtyCandidates.push(n);
-        }
-      }
-      if(qtyCandidates.length)break;
     }
   }
   const uniqueQty=[...new Set(qtyCandidates)];
@@ -1949,21 +1905,6 @@ async function recognizeBoxLabel(file){
   }
   };
   findMatches();
-  if(candidates.length===0&&reads.length===1){
-    status.textContent='Checking strain name more closely…';
-    const retry=document.createElement('canvas');retry.width=canvas.width;retry.height=canvas.height;
-    const rc=retry.getContext('2d');rc.drawImage(canvas,0,0);
-    const px=rc.getImageData(0,0,retry.width,retry.height);
-    for(let i=0;i<px.data.length;i+=4){const g=.299*px.data[i]+.587*px.data[i+1]+.114*px.data[i+2];const v=g>155?255:0;px.data[i]=px.data[i+1]=px.data[i+2]=v;}
-    rc.putImageData(px,0,0);
-    const attempt=await Tesseract.recognize(retry,'eng');
-    const extra=String(attempt.data.text||'');
-    const extraTypes=(extra.toUpperCase().match(/\(\s*[SIH]\s*\)/g)||[]).map(t=>t.replace(/[^SIH]/g,''));
-    if(extraTypes.some(t=>t!==recognizedType))throw Error('Conflicting strain type detected. No stock added.');
-    reads.push(extra);
-    cleanPasses=reads.map(read=>normalizedLabel(String(read).replace(/X\s*[0-9O]{1,4}\.?/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' ')));
-    findMatches();
-  }
   if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
   labelMatch={...candidates[0],account:customerAccountCode,sessionToken:customerSessionToken,raw};
   preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
