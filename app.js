@@ -1815,51 +1815,6 @@ if('serviceWorker' in navigator){
   window.closeProductImage=closeProductImage;
 })();
 
-/* Mobile Quick Stock: immediate account-scoped box increments */
-let quickStockBusy=false,quickStockCatalogue=[];
-async function loadQuickStock(){
- const select=$('#quickStockProduct');if(!select)return;
- try{
-  quickStockCatalogue=await api('/rest/v1/products?select=id,name,group_name,category,description&active=eq.true&order=name.asc',{auth:true});
-  quickStockCatalogue=quickStockCatalogue.filter(p=>/\b(king|mini)\b/i.test(p.name||'') && !/edibles/i.test(p.category||''));
-  select.innerHTML=quickStockCatalogue.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-  fillQuickStockStrains();
- }catch(e){$('#quickStockMessage').textContent=e.message;}
-}
-function fillQuickStockStrains(){
- const p=quickStockCatalogue.find(x=>String(x.id)===String($('#quickStockProduct')?.value));
- const strains=p?parseStrainList(p.description):[];
- $('#quickStockStrain').innerHTML=strains.map(s=>`<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('');
- const qty=/\bmini\b/i.test(p?.name||'')?10:20;
- $('#quickStockAdd').textContent=`+ ADD 1 BOX (+${qty})`;
- $('#quickStockAdd').disabled=!strains.length;
-}
-async function addQuickStockBox(){
- if(quickStockBusy)return;
- const account=$('#quickStockAccount').value,product=$('#quickStockProduct').value,strain=$('#quickStockStrain').value;
- const p=quickStockCatalogue.find(x=>String(x.id)===String(product));
- if(!p||!strain)return;
- const pack=/\bmini\b/i.test(p.name)?10:20;
- const btn=$('#quickStockAdd'),msg=$('#quickStockMessage');
- quickStockBusy=true;btn.disabled=true;msg.textContent='Adding box…';
- try{
-  const inv=await api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:account})});
-  const row=(inv||[]).find(x=>String(x.product_id)===String(product)&&String(x.strain_name||'').trim().toLowerCase()===strain.trim().toLowerCase());
-  const previous=Number(row?.stock||0),next=previous+pack;
-  await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:account,p_product_id:product,p_strain_name:strain,p_stock:next})});
-  msg.textContent=`✓ ${account}: ${p.name} — ${strain}: +${pack} units. ${previous} → ${next}.`;
-  if(navigator.vibrate)navigator.vibrate(70);
-  await Promise.all([loadCustomerStock(),loadAdminProducts()]);
- }catch(e){msg.textContent='Not added: '+e.message;}
- finally{quickStockBusy=false;btn.disabled=false;}
-}
-window.addEventListener('DOMContentLoaded',()=>{
- if(!$('#quickStockPanel'))return;
- $('#quickStockProduct').onchange=fillQuickStockStrains;
- $('#quickStockAdd').onclick=addQuickStockBox;
- loadQuickStock();
-});
-
 /* Camera barcode stock scanner */
 let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,zxingReader=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
 function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
