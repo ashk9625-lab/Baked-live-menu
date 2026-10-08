@@ -1866,19 +1866,33 @@ async function recognizeBoxLabel(file){
   const types=[...new Set(typeTokens.map(t=>{const x=t.replace(/[^A-Z]/gi,'').toUpperCase();return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;}))];
   if(types.length!==1)throw Error('S/I/H not recognised. See the camera-read text below; no stock was changed.');
   const recognizedType=types[0];
-  const ps=await api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true});
-  const cleaned=normalizedLabel(raw.replace(/\bX\s*\d+\b|\b\d+\s*X\b/g,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' '));
+  const [ps,inventory]=await Promise.all([
+    api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
+    api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
+  ]);
+  const cleaned=normalizedLabel(raw.replace(/X\\s*\\d{1,4}/gi,' ').replace(/\\(\\s*[SIH1|!]\\s*\\)/gi,' '));
   const candidates=[];
   for(const p of ps||[]){
-   if(!normalizedLabel(p.name)||!cleaned.includes(normalizedLabel(p.name)))continue;
-   for(const s of parseStrainList(p.description)){
-    const sm=String(s.name).match(/\(([SIH])\)/i);
-    if(!sm||sm[1].toUpperCase()!==recognizedType)continue;
-    const name=normalizedLabel(s.name.replace(/\([SIH]\)/gi,''));
-    if(name&&cleaned.includes(name))candidates.push({p,s,qty});
-   }
+    const productName=normalizedLabel(p.name);
+    if(!productName||!cleaned.includes(productName))continue;
+    const names=new Set([
+      ...parseStrainList(p.description).map(s=>s.name),
+      ...(inventory||[]).filter(x=>String(x.product_id)===String(p.id)).map(x=>x.strain_name)
+    ]);
+    for(const strain of names){
+      const sm=String(strain).match(/\\(\\s*([SIH])\\s*\\)/i);
+      if(sm&&sm[1].toUpperCase()!==recognizedType)continue;
+      const base=normalizedLabel(String(strain).replace(/\\(\\s*[SIH]\\s*\\)/gi,''));
+      if(!base||!cleaned.includes(base))continue;
+      const invRow=(inventory||[]).find(x=>String(x.product_id)===String(p.id)&&normalizedLabel(x.strain_name)===normalizedLabel(strain));
+      if(!invRow)continue;
+      const actualType=String(invRow.strain_name).match(/\\(\\s*([SIH])\\s*\\)/i);
+      if(actualType&&actualType[1].toUpperCase()!==recognizedType)continue;
+      if(!candidates.some(x=>String(x.p.id)===String(p.id)&&x.s.name===invRow.strain_name))
+        candidates.push({p,s:{name:invRow.strain_name},qty});
+    }
   }
-  if(candidates.length!==1)throw Error('No unique product and strain match. Check the camera-read text below. No stock was changed.');
+  if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
   labelMatch={...candidates[0],account:customerAccountCode,raw};
   preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
   status.textContent='Review the recognised label and confirm.';
