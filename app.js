@@ -1870,8 +1870,9 @@ async function recognizeBoxLabel(file){
     const x=t.replace(/[^A-Z]/gi,'').toUpperCase();
     return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;
   }))];
-  if(types.length!==1)throw Error('Strain type (H), (S), or (I) not recognised uniquely. Camera read: '+raw.trim()+'. No stock was changed.');
-  const recognizedType=types[0];
+  const manualType=$('#labelTypeOverride')?.value||'';
+  if(!manualType&&types.length!==1)throw Error('Strain type unclear. Choose H, S or I in the Strain Type field. No stock was changed.');
+  const recognizedType=manualType||types[0];
   const [ps,inventory]=await Promise.all([
     api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
     api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
@@ -1918,7 +1919,7 @@ async function confirmBoxLabelStock(){
   if(!Number.isSafeInteger(old)||old<0)throw Error('Cannot verify existing stock.');
   await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:account,p_product_id:p.id,p_strain_name:s.name,p_stock:old+qty})});
   status.textContent='Added '+qty+' to '+account+' — '+p.name+' / '+s.name+'. New stock: '+(old+qty)+'.';
-  labelMatch=null;$('#labelPhoto').value='';if($('#labelQuantityOverride'))$('#labelQuantityOverride').value='';$('#labelRecognitionPreview').textContent='';
+  labelMatch=null;$('#labelPhoto').value='';if($('#labelQuantityOverride'))$('#labelQuantityOverride').value='';if($('#labelTypeOverride'))$('#labelTypeOverride').value='';$('#labelRecognitionPreview').textContent='';
   await loadCustomerStock();
  }catch(err){status.textContent='Stock NOT confirmed: '+err.message;}
  finally{labelBusy=false;btn.disabled=!labelMatch;}
@@ -1926,6 +1927,7 @@ async function confirmBoxLabelStock(){
 window.addEventListener('DOMContentLoaded',()=>{
  if($('#labelPhoto'))$('#labelPhoto').onchange=e=>recognizeBoxLabel(e.target.files?.[0]);
  if($('#labelQuantityOverride'))$('#labelQuantityOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file&&$('#labelQuantityOverride').value.trim())recognizeBoxLabel(file);};
+ if($('#labelTypeOverride'))$('#labelTypeOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file)recognizeBoxLabel(file);};
  if($('#labelConfirmStock'))$('#labelConfirmStock').onclick=confirmBoxLabelStock;
 });
 
