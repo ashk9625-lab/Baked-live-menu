@@ -1853,12 +1853,13 @@ async function recognizeBoxLabel(file){
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   // Printed labels often join X20 directly to the strain/type with no space.
   // A word boundary before X incorrectly rejects e.g. CHEESE(I)X20 or CHEESEX20.
-  const qtyCandidates=[...raw.matchAll(/[X×✕]\s*[:=.-]?\s*(\d{1,4})(?!\d)|(\d{1,4})\s*[X×✕](?![A-Z])/gi)].map(m=>Number(m[1]||m[2]));
+  const qtyText=raw.replace(/[×✕]/g,'X').replace(/([X])\\s*([0-9O]{1,4})/gi,(_,x,n)=>x+n.replace(/O/g,'0'));
+  const qtyCandidates=[...qtyText.matchAll(/X\\s*[:=.-]?\\s*([0-9O]{1,4})(?![0-9])|([0-9O]{1,4})\\s*X(?![A-Z])/gi)].map(m=>Number((m[1]||m[2]).replace(/O/gi,'0')));
   const uniqueQty=[...new Set(qtyCandidates)];
   const manualQtyText=String($('#labelQuantityOverride')?.value||'').trim();
   const manualQty=manualQtyText?Number(manualQtyText):null;
   if(manualQtyText&&(!Number.isSafeInteger(manualQty)||manualQty<1||manualQty>1000))throw Error('Enter a whole-number box quantity between 1 and 1000.');
-  if(!manualQtyText&&uniqueQty.length!==1)throw Error('Quantity unclear. Enter 20 (or the quantity printed on your box) in Box quantity, then select the same photo again. No stock was changed.');
+  if(!manualQtyText&&uniqueQty.length!==1)throw Error('Quantity not read. Enter the quantity printed on the box in Box Quantity. The same photo will be checked again automatically. No stock was changed.');
   const qty=manualQtyText?manualQty:uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
@@ -1924,7 +1925,7 @@ async function confirmBoxLabelStock(){
 }
 window.addEventListener('DOMContentLoaded',()=>{
  if($('#labelPhoto'))$('#labelPhoto').onchange=e=>recognizeBoxLabel(e.target.files?.[0]);
- if($('#labelQuantityOverride'))$('#labelQuantityOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file)recognizeBoxLabel(file);};
+ if($('#labelQuantityOverride'))$('#labelQuantityOverride').oninput=()=>{const file=$('#labelPhoto')?.files?.[0];if(file&&$('#labelQuantityOverride').value.trim())recognizeBoxLabel(file);};
  if($('#labelConfirmStock'))$('#labelConfirmStock').onclick=confirmBoxLabelStock;
 });
 
