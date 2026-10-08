@@ -1950,27 +1950,33 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 let labelCameraStream=null;
 let labelCameraZoom=1;
-let labelHardwareZoom=false;
-async function setLabelCameraZoom(zoom){
- labelCameraZoom=zoom;
+let labelDigitalZoom=1;
+let labelZoomRequest=0;
+async function setLabelCameraZoom(requested){
+ const request=++labelZoomRequest;
+ const zoom=Math.max(1,Math.min(6,Number(requested)||1));
  const video=$('#labelCameraVideo');
  const track=labelCameraStream?.getVideoTracks()[0];
- labelHardwareZoom=false;
- if(track){
-  const caps=typeof track.getCapabilities==='function'?track.getCapabilities():{};
-  if(caps.zoom&&typeof track.applyConstraints==='function'){
-   try{
-    const target=Math.min(caps.zoom.max,Math.max(caps.zoom.min,zoom));
-    await track.applyConstraints({advanced:[{zoom:target}]});
-    labelHardwareZoom=true;
-   }catch(e){labelHardwareZoom=false;}
-  }
+ if(!track)return;
+ let hardware=1;
+ const caps=typeof track.getCapabilities==='function'?track.getCapabilities():{};
+ if(caps.zoom&&typeof track.applyConstraints==='function'){
+  try{
+   hardware=Math.min(caps.zoom.max,Math.max(caps.zoom.min,zoom));
+   await track.applyConstraints({advanced:[{zoom:hardware}]});
+  }catch(e){hardware=1;}
  }
- video.style.transform=labelHardwareZoom?'none':'scale('+zoom+')';
+ if(request!==labelZoomRequest)return;
+ labelCameraZoom=zoom;
+ labelDigitalZoom=Math.max(1,zoom/hardware);
+ video.style.transform=labelDigitalZoom>1?'scale('+labelDigitalZoom+')':'none';
  video.parentElement.style.overflow='hidden';
+ const slider=$('#labelZoomSlider');if(slider)slider.value=String(zoom);
+ const value=$('#labelZoomValue');if(value)value.textContent=zoom+'×';
  document.querySelectorAll('.label-zoom').forEach(b=>{b.disabled=Number(b.dataset.zoom)===zoom;});
 }
 function closeLabelCamera(){
+ labelZoomRequest++;
  labelCameraStream?.getTracks().forEach(t=>t.stop());
  labelCameraStream=null;
  $('#labelCameraVideo').srcObject=null;
@@ -1991,6 +1997,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   }catch(e){closeLabelCamera();$('#labelRecognitionStatus').textContent=e.message||'Camera unavailable. Use photo option.';}
  };
  document.querySelectorAll('.label-zoom').forEach(b=>b.onclick=()=>setLabelCameraZoom(Number(b.dataset.zoom)));
+ const slider=$('#labelZoomSlider');if(slider)slider.oninput=()=>setLabelCameraZoom(Number(slider.value));
  if(close)close.onclick=closeLabelCamera;
  if(capture)capture.onclick=async()=>{
   const video=$('#labelCameraVideo');
@@ -1998,7 +2005,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   capture.disabled=true;
   try{
    const canvas=document.createElement('canvas');
-   const zoom=labelHardwareZoom?1:labelCameraZoom;
+   const zoom=labelDigitalZoom;
    const sw=video.videoWidth/zoom,sh=video.videoHeight/zoom;
    canvas.width=Math.round(Math.min(sw,1600));canvas.height=Math.round(canvas.width*sh/sw);
    canvas.getContext('2d').drawImage(video,(video.videoWidth-sw)/2,(video.videoHeight-sh)/2,sw,sh,0,0,canvas.width,canvas.height);
