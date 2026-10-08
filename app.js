@@ -1815,6 +1815,67 @@ if('serviceWorker' in navigator){
   window.closeProductImage=closeProductImage;
 })();
 
+/* OCR box label receiving: no account switch, explicit confirmation */
+let labelMatch=null,labelBusy=false;
+function normalizedLabel(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();}
+async function recognizeBoxLabel(file){
+ const status=$('#labelRecognitionStatus'),preview=$('#labelRecognitionPreview'),confirm=$('#labelConfirmStock');
+ labelMatch=null;confirm.disabled=true;preview.textContent='';
+ if(!file)return;
+ if(!customerSessionToken||!['NSFT','CUSTOMER'].includes(customerAccountCode)){status.textContent='Log into the Customer or NSFT Live Menu before receiving stock.';return;}
+ if(!window.Tesseract){status.textContent='Text recognition library did not load. Check your connection.';return;}
+ status.textContent='Reading sticker…';
+ try{
+  const ocr=await Tesseract.recognize(file,'eng');
+  const raw=String(ocr.data.text||'').toUpperCase().replace(/[×✕]/g,'X');
+  const qtyMatches=[...raw.matchAll(/\bX\s*(\d{1,4})\b|\b(\d{1,4})\s*X\b/g)];
+  if(qtyMatches.length!==1)throw Error('Could not read one clear X quantity. Retake the photo.');
+  const qty=Number(qtyMatches[0][1]||qtyMatches[0][2]);
+  if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
+  const typeMatch=raw.match(/\(([SIH])\)/);
+  if(!typeMatch)throw Error('Sativa/Indica/Hybrid letter was not recognised. Retake the photo.');
+  const ps=await api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true});
+  const cleaned=normalizedLabel(raw.replace(/\bX\s*\d+\b|\b\d+\s*X\b/g,' ').replace(/\([SIH]\)/g,' '));
+  const candidates=[];
+  for(const p of ps||[]){
+   if(!normalizedLabel(p.name)||!cleaned.includes(normalizedLabel(p.name)))continue;
+   for(const s of parseStrainList(p.description)){
+    const sm=String(s.name).match(/\(([SIH])\)/i);
+    if(!sm||sm[1].toUpperCase()!==typeMatch[1])continue;
+    const name=normalizedLabel(s.name.replace(/\([SIH]\)/gi,''));
+    if(name&&cleaned.includes(name))candidates.push({p,s,qty});
+   }
+  }
+  if(candidates.length!==1)throw Error('No unique exact product and strain match. No stock added. Retake the photo or check the catalogue.');
+  labelMatch={...candidates[0],account:customerAccountCode,raw};
+  preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
+  status.textContent='Review the recognised label and confirm.';
+  confirm.disabled=false;
+ }catch(err){status.textContent=err.message||'Could not read label';}
+}
+async function confirmBoxLabelStock(){
+ if(!labelMatch||labelBusy)return;
+ const {p,s,qty,account}=labelMatch,status=$('#labelRecognitionStatus'),btn=$('#labelConfirmStock');
+ if(!customerSessionToken||customerAccountCode!==account){status.textContent='Account changed. Scan again.';return;}
+ labelBusy=true;btn.disabled=true;
+ try{
+  const inv=await api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:account})});
+  const row=(inv||[]).find(x=>String(x.product_id)===String(p.id)&&normalizedLabel(x.strain_name)===normalizedLabel(s.name));
+  if(!row)throw Error('Strain stock record not found; no stock was changed.');
+  const old=Number(row.stock);
+  if(!Number.isSafeInteger(old)||old<0)throw Error('Cannot verify existing stock.');
+  await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:account,p_product_id:p.id,p_strain_name:s.name,p_stock:old+qty})});
+  status.textContent='Added '+qty+' to '+account+' — '+p.name+' / '+s.name+'. New stock: '+(old+qty)+'.';
+  labelMatch=null;$('#labelPhoto').value='';$('#labelRecognitionPreview').textContent='';
+  await loadCustomerStock();
+ }catch(err){status.textContent='Stock NOT confirmed: '+err.message;}
+ finally{labelBusy=false;btn.disabled=!labelMatch;}
+}
+window.addEventListener('DOMContentLoaded',()=>{
+ if($('#labelPhoto'))$('#labelPhoto').onchange=e=>recognizeBoxLabel(e.target.files?.[0]);
+ if($('#labelConfirmStock'))$('#labelConfirmStock').onclick=confirmBoxLabelStock;
+});
+
 /* Camera barcode stock scanner */
 let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,zxingReader=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
 function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
