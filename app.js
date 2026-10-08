@@ -1819,7 +1819,8 @@ if('serviceWorker' in navigator){
 let barcodeStream=null,barcodeDetector=null,barcodeScanTimer=null,zxingReader=null,lastBarcodeScan=null,lastBarcodeValue='',lastBarcodeAt=0,pendingBarcode='';
 function scannerProducts(){return [...products].sort((a,b)=>a.name.localeCompare(b.name));}
 function fillScannerStrains(){const p=products.find(x=>String(x.id)===String($('#scannerProduct')?.value));const s=$('#scannerStrain');if(!s)return;const strains=p?parseStrainList(p.description):[];s.innerHTML='<option value="">New strain…</option>'+strains.map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)} — current ${Number(x.qty||0)}</option>`).join('');}
-function fillScannerProducts(){const s=$('#scannerProduct');if(s){s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');s.onchange=fillScannerStrains;fillScannerStrains();}}
+function scannerDefaultPack(){const p=products.find(x=>String(x.id)===String($('#scannerProduct')?.value));const isMini=/\bmini\b/i.test(String(p?.name||'')+' '+String(p?.group_name||''));const pack=$('#scannerPackQty');if(pack)pack.value=isMini?'10':'20';}
+function fillScannerProducts(){const s=$('#scannerProduct');if(s){s.innerHTML=scannerProducts().map(p=>`<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.category||'')}</option>`).join('');s.onchange=()=>{fillScannerStrains();scannerDefaultPack();};fillScannerStrains();scannerDefaultPack();}}
 function showScannerResult(r){const box=$('#scannerResult');if(!box)return;box.innerHTML=`<div class="admin-row"><div class="admin-row-main">${r.image_url?`<img src="${escapeHtml(r.image_url)}" alt="" style="width:58px;height:58px;object-fit:cover;border-radius:8px">`:''}<div><strong>${escapeHtml(r.product_name)}${r.strain_name?` — ${escapeHtml(r.strain_name)}`:''}</strong><small>${escapeHtml(r.barcode||'')} · +${Number(r.added||0)} units${r.shared_edible?' · Shared Edibles':''}</small></div></div><div class="admin-row-data"><strong>New stock: ${Number(r.new_stock||0)}</strong></div></div>`;}
 let barcodeProcessing=false;
 async function processBarcode(raw){
@@ -1829,7 +1830,7 @@ async function processBarcode(raw){
  try{
    const rows=await api('/rest/v1/rpc/admin_barcode_lookup',{method:'POST',auth:true,body:JSON.stringify({p_barcode:barcode})});
    const found=Array.isArray(rows)?rows[0]:rows;
-   if(!found||!String(found.strain_name||'').trim()){pendingBarcode=barcode;stopBarcodeScanner(false);fillScannerProducts();if(found?.product_id&&$('#scannerProduct')){$('#scannerProduct').value=found.product_id;fillScannerStrains();}if(found?.pack_qty&&$('#scannerPackQty'))$('#scannerPackQty').value=String(found.pack_qty);$('#registerBarcodePanel')?.classList.remove('hidden');$('#scannedBarcodeValue').textContent=barcode;msg.textContent=found?`Barcode ${barcode} already maps to ${found.product_name}, but needs its exact strain. Choose the strain once and save it; future scans will add automatically.`:`Barcode ${barcode} captured. Choose the product, exact strain and pack quantity once, then Save & Add Stock.`;$('#registerBarcodePanel')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+   if(!found||!String(found.strain_name||'').trim()){pendingBarcode=barcode;stopBarcodeScanner(false);fillScannerProducts();if(found?.product_id&&$('#scannerProduct')){$('#scannerProduct').value=found.product_id;fillScannerStrains();scannerDefaultPack();}if(found?.pack_qty&&$('#scannerPackQty'))$('#scannerPackQty').value=String(found.pack_qty);$('#registerBarcodePanel')?.classList.remove('hidden');$('#scannedBarcodeValue').textContent=barcode;msg.textContent=found?`Barcode ${barcode} already maps to ${found.product_name}, but needs its exact strain. Choose the strain once and save it; future scans will add automatically.`:`Barcode ${barcode} captured. Choose the product, exact strain and pack quantity once, then Save & Add Stock.`;$('#registerBarcodePanel')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
    $('#registerBarcodePanel')?.classList.add('hidden');
    const r=await api('/rest/v1/rpc/admin_scan_add_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:$('#scannerAccount').value,p_barcode:barcode})});
    lastBarcodeScan={barcode,account:$('#scannerAccount').value};$('#undoScanButton').disabled=false;showScannerResult(r);msg.textContent=`${r.product_name} — ${r.strain_name}: +${r.added} added. Strain stock ${r.strain_stock}.`;toast(`+${r.added} ${r.product_name} — ${r.strain_name}`);await loadCustomerStock();
@@ -1877,6 +1878,7 @@ function stopBarcodeScanner(showMessage=true){
 async function saveScannedBarcode(){
  if(!pendingBarcode)return;
  const product=$('#scannerProduct').value,pack=Number($('#scannerPackQty').value);
+ if(!product||![10,20].includes(pack)){$('#scannerMessage').textContent='Choose a product and a valid box quantity.';return;}
  let strain=($('#scannerStrain')?.value||'').trim();
  const newName=($('#scannerNewStrain')?.value||'').trim(),type=($('#scannerStrainType')?.value||'').trim();
  if(!strain&&newName){if(!type){$('#scannerMessage').textContent='Choose Sativa, Indica or Hybrid for the new strain.';return;}strain=`${newName} (${type})`;}
