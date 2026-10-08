@@ -1928,8 +1928,9 @@ async function recognizeBoxLabel(file){
     api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
   ]);
   // Match each OCR pass independently. Never concatenate passes into a false name.
-  const cleanPasses=reads.map(read=>normalizedLabel(String(read).replace(/X\s*[0-9O]{1,4}\.?/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' ')));
+  let cleanPasses=reads.map(read=>normalizedLabel(String(read).replace(/X\s*[0-9O]{1,4}\.?/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' ')));
   const candidates=[];
+  const findMatches=()=>{
   for(const p of ps||[]){
     const productName=normalizedLabel(p.name);
     if(!productName||!cleanPasses.some(line=>(' '+line+' ').includes(' '+productName+' ')))continue;
@@ -1945,6 +1946,23 @@ async function recognizeBoxLabel(file){
       if(!candidates.some(x=>String(x.p.id)===String(p.id)&&x.s.name===strain))
         candidates.push({p,s:{name:strain},qty});
     }
+  }
+  };
+  findMatches();
+  if(candidates.length===0&&reads.length===1){
+    status.textContent='Checking strain name more closely…';
+    const retry=document.createElement('canvas');retry.width=canvas.width;retry.height=canvas.height;
+    const rc=retry.getContext('2d');rc.drawImage(canvas,0,0);
+    const px=rc.getImageData(0,0,retry.width,retry.height);
+    for(let i=0;i<px.data.length;i+=4){const g=.299*px.data[i]+.587*px.data[i+1]+.114*px.data[i+2];const v=g>155?255:0;px.data[i]=px.data[i+1]=px.data[i+2]=v;}
+    rc.putImageData(px,0,0);
+    const attempt=await Tesseract.recognize(retry,'eng');
+    const extra=String(attempt.data.text||'');
+    const extraTypes=(extra.toUpperCase().match(/\(\s*[SIH]\s*\)/g)||[]).map(t=>t.replace(/[^SIH]/g,''));
+    if(extraTypes.some(t=>t!==recognizedType))throw Error('Conflicting strain type detected. No stock added.');
+    reads.push(extra);
+    cleanPasses=reads.map(read=>normalizedLabel(String(read).replace(/X\s*[0-9O]{1,4}\.?/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' ')));
+    findMatches();
   }
   if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
   labelMatch={...candidates[0],account:customerAccountCode,sessionToken:customerSessionToken,raw};
