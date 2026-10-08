@@ -29,7 +29,7 @@ function showCustomerGate(){
   }
   gate.classList.remove('hidden');document.body.classList.add('customer-locked');
 }
-function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');document.getElementById('customerLogoutButton')?.classList.remove('hidden');}
+function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');document.getElementById('customerLogoutButton')?.classList.remove('hidden');document.getElementById('refreshMenuButton')?.classList.remove('hidden');}
 async function customerAccessLogin(e){
   e.preventDefault();const msg=document.getElementById('customerAccessMessage');msg.textContent='Signing in…';
   try{
@@ -41,7 +41,7 @@ async function customerAccessLogin(e){
 }
 async function customerAccessLogout(){
   try{if(customerSessionToken)await api('/rest/v1/rpc/customer_logout',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});}catch{}
-  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');syncStockAccountLabel();showCustomerGate();
+  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');document.getElementById('refreshMenuButton')?.classList.add('hidden');syncStockAccountLabel();showCustomerGate();
 }
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
@@ -1316,6 +1316,15 @@ async function saveFastStock(){
 
 if($('#orderAccountFilter'))$('#orderAccountFilter').onchange=loadOrders;
 if($('#customerLogoutButton'))$('#customerLogoutButton').onclick=customerAccessLogout;
+if($('#refreshMenuButton'))$('#refreshMenuButton').onclick=async()=>{
+ const btn=$('#refreshMenuButton');
+ if(!customerSessionToken){showCustomerGate();return;}
+ btn.disabled=true;btn.textContent='↻ Refreshing…';
+ try{await loadProducts();toast('Live menu refreshed — latest stock loaded');}
+ catch(err){toast('Refresh failed: '+err.message);}
+ finally{btn.disabled=false;btn.textContent='↻ Refresh';}
+};
+
 syncStockAccountLabel();
 if($('#customerStockSearch'))$('#customerStockSearch').oninput=renderCustomerStock;
 if($('#saveCustomerStockButton'))$('#saveCustomerStockButton').onclick=saveCustomerStock;
