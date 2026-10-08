@@ -1888,9 +1888,9 @@ async function recognizeBoxLabel(file){
   if(!qtyCandidates.length){
     status.textContent='Checking quantity more closely…';
     const regions=[
-      [.20,.08,.70,.60],
-      [.33,.15,.52,.43],
-      [0,.10,1,.65]
+      [0,0,1,1],
+      [0,.35,1,.65],
+      [0,0,1,.65]
     ];
     for(const [x,y,w,h] of regions){
       const crop=document.createElement('canvas');
