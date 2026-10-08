@@ -1871,14 +1871,12 @@ async function recognizeBoxLabel(file){
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
   // Recognise bracketed type codes even when OCR uses 1, !, | for I.
-  const typeSource=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1!|L]\s*\)/gi,'(I)');
-  const typeTokens=typeSource.match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
-  const types=[...new Set(typeTokens.map(t=>{
-    const x=t.replace(/[^A-Z]/gi,'').toUpperCase();
-    return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;
-  }))];
-  if(types.length!==1)throw Error('Could not reliably recognise (H), (S) or (I). No stock was added. Camera read: '+raw.trim());
-  const recognizedType=types[0];
+  // OCR can lose brackets or confuse the capital I with 1, !, | or lowercase l.
+  const typeSource=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')');
+  const typeTokens=typeSource.match(/\(\s*[SIH1!|l]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
+  const types=[...new Set(typeTokens.map(t=>{const x=t.replace(/[^A-Z1!|]/gi,'').toUpperCase();return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':/[1!|]/.test(x)?'I':x==='L'?'I':x;}))];
+  if(types.length>1)throw Error('Conflicting strain types on sticker. No stock added.');
+  const recognizedType=types.length===1?types[0]:null;
   const [ps,inventory]=await Promise.all([
     api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
     api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
@@ -1894,7 +1892,7 @@ async function recognizeBoxLabel(file){
       if(String(invRow.product_id)!==String(p.id))continue;
       const strain=String(invRow.strain_name||'');
       const actualType=strain.match(/\(\s*([SIH])\s*\)/i);
-      if(actualType&&actualType[1].toUpperCase()!==recognizedType)continue;
+      if(recognizedType&&actualType&&actualType[1].toUpperCase()!==recognizedType)continue;
       const base=normalizedLabel(strain.replace(/\(\s*[SIH]\s*\)/gi,''));
       if(!base)continue;
       const match=cleanPasses.some(line=>(' '+line+' ').includes(' '+base+' '));
@@ -1905,6 +1903,10 @@ async function recognizeBoxLabel(file){
   }
   };
   findMatches();
+  if(!recognizedType&&candidates.length===1){
+    const t=String(candidates[0].s.name).match(/\(\s*([SIH])\s*\)/i);
+    if(!t)throw Error('Strain type missing from inventory. No stock added.');
+  }
   if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
   labelMatch={...candidates[0],account:customerAccountCode,sessionToken:customerSessionToken,raw};
   preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
