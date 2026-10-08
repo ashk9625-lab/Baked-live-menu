@@ -1853,14 +1853,11 @@ async function recognizeBoxLabel(file){
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   // Printed labels often join X20 directly to the strain/type with no space.
   // A word boundary before X incorrectly rejects e.g. CHEESE(I)X20 or CHEESEX20.
-  const qtyText=raw.replace(/[×✕]/g,'X').replace(/([X])\\s*([0-9O]{1,4})/gi,(_,x,n)=>x+n.replace(/O/g,'0'));
-  const qtyCandidates=[...qtyText.matchAll(/X\\s*[:=.-]?\\s*([0-9O]{1,4})(?![0-9])|([0-9O]{1,4})\\s*X(?![A-Z])/gi)].map(m=>Number((m[1]||m[2]).replace(/O/gi,'0')));
+  const qtyText=raw.replace(/[×✕]/g,'X').replace(/([X])\s*([0-9O]{1,4})/gi,(_,x,n)=>x+n.replace(/O/g,'0'));
+  const qtyCandidates=[...qtyText.matchAll(/X\s*[:=.-]?\s*([0-9O]{1,4})(?![0-9])|([0-9O]{1,4})\s*X(?![A-Z])/gi)].map(m=>Number((m[1]||m[2]).replace(/O/gi,'0')));
   const uniqueQty=[...new Set(qtyCandidates)];
-  const manualQtyText=String($('#labelQuantityOverride')?.value||'').trim();
-  const manualQty=manualQtyText?Number(manualQtyText):null;
-  if(manualQtyText&&(!Number.isSafeInteger(manualQty)||manualQty<1||manualQty>1000))throw Error('Enter a whole-number box quantity between 1 and 1000.');
-  if(!manualQtyText&&uniqueQty.length!==1)throw Error('Quantity not read. Enter the quantity printed on the box in Box Quantity. The same photo will be checked again automatically. No stock was changed.');
-  const qty=manualQtyText?manualQty:uniqueQty[0];
+  if(uniqueQty.length!==1)throw Error('Could not reliably recognise box quantity. No stock was added. Camera read: '+raw.trim());
+  const qty=uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
   // Recognise bracketed type codes even when OCR uses 1, !, | for I.
@@ -1870,9 +1867,8 @@ async function recognizeBoxLabel(file){
     const x=t.replace(/[^A-Z]/gi,'').toUpperCase();
     return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;
   }))];
-  const manualType=$('#labelTypeOverride')?.value||'';
-  if(!manualType&&types.length!==1)throw Error('Strain type unclear. Choose H, S or I in the Strain Type field. No stock was changed.');
-  const recognizedType=manualType||types[0];
+  if(types.length!==1)throw Error('Could not reliably recognise (H), (S) or (I). No stock was added. Camera read: '+raw.trim());
+  const recognizedType=types[0];
   const [ps,inventory]=await Promise.all([
     api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
     api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
@@ -1902,8 +1898,8 @@ async function recognizeBoxLabel(file){
   if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
   labelMatch={...candidates[0],account:customerAccountCode,raw};
   preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
-  status.textContent='Review the recognised label and confirm.';
-  confirm.disabled=false;
+  status.textContent='Exact label match found. Adding stock…';
+  await confirmBoxLabelStock();
  }catch(err){status.textContent=err.message||'Could not read label';}
 }
 async function confirmBoxLabelStock(){
