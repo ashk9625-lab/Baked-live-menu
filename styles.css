@@ -355,3 +355,9 @@
 .customer-access-card>p{color:#aeb5b1}
 .customer-access-card select,.customer-access-card input{width:100%}
 body.customer-locked{overflow:hidden}
+
+/* Install button beside age badge, never floating over products or cart */
+.header-utility{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.header-utility .install-baked-floating{position:static !important;inset:auto !important;left:auto !important;right:auto !important;bottom:auto !important;top:auto !important;width:auto !important;min-height:32px !important;padding:7px 10px !important;font-size:11px !important;box-shadow:none !important;z-index:auto !important;flex:0 0 auto !important}
+.header-utility .install-baked-icon{font-size:13px}
+@media(max-width:620px){.header-utility{width:100%;gap:8px}.header-utility .install-baked-floating{width:auto !important;min-height:34px !important;font-size:11px !important;padding:7px 10px !important}body{padding-bottom:0}}
