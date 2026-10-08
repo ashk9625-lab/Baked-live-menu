@@ -846,11 +846,13 @@ async function saveProduct(e){
   e.preventDefault();
   const currentStrains=syncProductStrainText(); saveNamesToStrainLibrary(currentStrains);
   const id=$('#productId').value, accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
+  const isSharedEdible=$('#productCategory').value.trim().toLowerCase()==='edibles';
+  const inventoryAccountCode=isSharedEdible?'NSFT':accountCode;
   // Capture the complete pre-save strain inventory so removed strains can be explicitly zeroed.
   let previousStrains=[];
   if(id){
     try{
-      const before=await api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})});
+      const before=await api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:inventoryAccountCode})});
       previousStrains=(before||[]).filter(x=>String(x.product_id)===String(id)).map(x=>({name:String(x.strain_name||'').trim(),qty:Number(x.stock||0)}));
     }catch(err){console.warn('Could not capture previous strain inventory',err);}
   }
@@ -872,7 +874,7 @@ async function saveProduct(e){
       ];
       await api('/rest/v1/rpc/admin_replace_customer_strains',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_strains:replacement})});
       // Keep the top-level account stock synchronized with the exact live strain total.
-      const liveTotal=currentStrains.reduce((sum,s)=>sum+Math.max(0,Number(s.qty||0)),0);
+      const liveTotal=currentStrains.length?currentStrains.reduce((sum,s)=>sum+Math.max(0,Number(s.qty||0)),0):requestedStock;
       await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:liveTotal})});
       if(!currentStrains.length){
         // A strain-managed product with every strain removed must become unavailable.
