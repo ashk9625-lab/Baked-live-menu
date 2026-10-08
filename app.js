@@ -1849,6 +1849,8 @@ async function recognizeBoxLabel(file){
   const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
   const ocr=await Tesseract.recognize(canvas,'eng');
+  const reads=[String(ocr.data.text||'')];
+  if(!/\bX\s*[0-9O]{1,4}\b/i.test(reads[0])||!/\(\s*[HSI1]\s*\)/i.test(reads[0])){
   const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
   for(let i=0;i<pixels.data.length;i+=4){
     const gray=.299*pixels.data[i]+.587*pixels.data[i+1]+.114*pixels.data[i+2];
@@ -1864,7 +1866,8 @@ async function recognizeBoxLabel(file){
   lower.height=Math.round(canvas.height*.52);
   lower.getContext('2d').drawImage(canvas,0,Math.round(canvas.height*.48),canvas.width,lower.height,0,0,lower.width,lower.height);
   const lowerRead=await Tesseract.recognize(lower,'eng');
-  const reads=[String(ocr.data.text||''),String(enhanced.data.text||''),String(lowerRead.data.text||'')];
+  reads.push(String(enhanced.data.text||''),String(lowerRead.data.text||''));
+  }
   const raw=reads.join('\n').toUpperCase().replace(/[×✕]/g,'X');
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   // Read X20, X 20, X2O, X:20 and OCR's multiplication glyphs.
