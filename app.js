@@ -1821,7 +1821,7 @@ async function loadQuickStock(){
  const select=$('#quickStockProduct');if(!select)return;
  try{
   quickStockCatalogue=await api('/rest/v1/products?select=id,name,group_name,category,description&active=eq.true&order=name.asc',{auth:true});
-  quickStockCatalogue=quickStockCatalogue.filter(p=>/\\b(king|mini)\\b/i.test(p.name||'') && !/edibles/i.test(p.category||''));
+  quickStockCatalogue=quickStockCatalogue.filter(p=>/\b(king|mini)\b/i.test(p.name||'') && !/edibles/i.test(p.category||''));
   select.innerHTML=quickStockCatalogue.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
   fillQuickStockStrains();
  }catch(e){$('#quickStockMessage').textContent=e.message;}
@@ -1830,7 +1830,7 @@ function fillQuickStockStrains(){
  const p=quickStockCatalogue.find(x=>String(x.id)===String($('#quickStockProduct')?.value));
  const strains=p?parseStrainList(p.description):[];
  $('#quickStockStrain').innerHTML=strains.map(s=>`<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('');
- const qty=/\\bmini\\b/i.test(p?.name||'')?10:20;
+ const qty=/\bmini\b/i.test(p?.name||'')?10:20;
  $('#quickStockAdd').textContent=`+ ADD 1 BOX (+${qty})`;
  $('#quickStockAdd').disabled=!strains.length;
 }
@@ -1839,7 +1839,7 @@ async function addQuickStockBox(){
  const account=$('#quickStockAccount').value,product=$('#quickStockProduct').value,strain=$('#quickStockStrain').value;
  const p=quickStockCatalogue.find(x=>String(x.id)===String(product));
  if(!p||!strain)return;
- const pack=/\\bmini\\b/i.test(p.name)?10:20;
+ const pack=/\bmini\b/i.test(p.name)?10:20;
  const btn=$('#quickStockAdd'),msg=$('#quickStockMessage');
  quickStockBusy=true;btn.disabled=true;msg.textContent='Adding box…';
  try{
