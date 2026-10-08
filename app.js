@@ -1898,26 +1898,23 @@ async function recognizeBoxLabel(file){
     api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true}),
     api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:customerAccountCode})})
   ]);
-  const cleaned=normalizedLabel(raw.replace(/X\s*\d{1,4}/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' '));
+  // Match each OCR pass independently. Never concatenate passes into a false name.
+  const cleanPasses=reads.map(read=>normalizedLabel(String(read).replace(/X\s*[0-9O]{1,4}\.?/gi,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' ')));
   const candidates=[];
   for(const p of ps||[]){
     const productName=normalizedLabel(p.name);
-    if(!productName||!cleaned.includes(productName))continue;
-    const names=new Set([
-      ...parseStrainList(p.description).map(s=>s.name),
-      ...(inventory||[]).filter(x=>String(x.product_id)===String(p.id)).map(x=>x.strain_name)
-    ]);
-    for(const strain of names){
-      const sm=String(strain).match(/\(\s*([SIH])\s*\)/i);
-      if(sm&&sm[1].toUpperCase()!==recognizedType)continue;
-      const base=normalizedLabel(String(strain).replace(/\(\s*[SIH]\s*\)/gi,''));
-      if(!base||!cleaned.includes(base))continue;
-      const invRow=(inventory||[]).find(x=>String(x.product_id)===String(p.id)&&normalizedLabel(x.strain_name)===normalizedLabel(strain));
-      if(!invRow)continue;
-      const actualType=String(invRow.strain_name).match(/\(\s*([SIH])\s*\)/i);
+    if(!productName||!cleanPasses.some(line=>(' '+line+' ').includes(' '+productName+' ')))continue;
+    for(const invRow of inventory||[]){
+      if(String(invRow.product_id)!==String(p.id))continue;
+      const strain=String(invRow.strain_name||'');
+      const actualType=strain.match(/\(\s*([SIH])\s*\)/i);
       if(actualType&&actualType[1].toUpperCase()!==recognizedType)continue;
-      if(!candidates.some(x=>String(x.p.id)===String(p.id)&&x.s.name===invRow.strain_name))
-        candidates.push({p,s:{name:invRow.strain_name},qty});
+      const base=normalizedLabel(strain.replace(/\(\s*[SIH]\s*\)/gi,''));
+      if(!base)continue;
+      const match=cleanPasses.some(line=>(' '+line+' ').includes(' '+base+' '));
+      if(!match)continue;
+      if(!candidates.some(x=>String(x.p.id)===String(p.id)&&x.s.name===strain))
+        candidates.push({p,s:{name:strain},qty});
     }
   }
   if(candidates.length!==1)throw Error('Strain not matched uniquely to current '+customerAccountCode+' stock. Camera read: '+raw.trim()+'. No stock was changed.');
