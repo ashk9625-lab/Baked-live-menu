@@ -1835,16 +1835,21 @@ async function recognizeBoxLabel(file){
  if(!window.Tesseract){status.textContent='Text recognition library did not load. Check your connection.';return;}
  status.textContent='Reading sticker…';
  try{
-  const ocr=await Tesseract.recognize(file,'eng');
+  const bitmap=await createImageBitmap(file);
+  const scale=Math.max(1,Math.min(4,1800/Math.max(bitmap.width,bitmap.height)));
+  const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+  const ocr=await Tesseract.recognize(canvas,'eng');
   const raw=String(ocr.data.text||'').toUpperCase().replace(/[×✕]/g,'X');
+  preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
   const qtyMatches=[...raw.matchAll(/\bX\s*(\d{1,4})\b|\b(\d{1,4})\s*X\b/g)];
-  if(qtyMatches.length!==1)throw Error('Could not read one clear X quantity. Retake the photo.');
+  if(qtyMatches.length!==1)throw Error('Quantity not recognised. See the camera-read text below; no stock was changed.');
   const qty=Number(qtyMatches[0][1]||qtyMatches[0][2]);
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
   const typeTokens=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1|!]\s*\)/g,'(I)').match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
   const types=[...new Set(typeTokens.map(t=>{const x=t.replace(/[^A-Z]/gi,'').toUpperCase();return x==='SATIVA'?'S':x==='INDICA'?'I':x==='HYBRID'?'H':x;}))];
-  if(types.length!==1)throw Error('Cannot identify one clear S, I or H on the label. Retake the photo.');
+  if(types.length!==1)throw Error('S/I/H not recognised. See the camera-read text below; no stock was changed.');
   const recognizedType=types[0];
   const ps=await api('/rest/v1/products?select=id,name,category,description&active=eq.true',{auth:true});
   const cleaned=normalizedLabel(raw.replace(/\bX\s*\d+\b|\b\d+\s*X\b/g,' ').replace(/\(\s*[SIH1|!]\s*\)/gi,' '));
@@ -1858,7 +1863,7 @@ async function recognizeBoxLabel(file){
     if(name&&cleaned.includes(name))candidates.push({p,s,qty});
    }
   }
-  if(candidates.length!==1)throw Error('No unique exact product and strain match. No stock added. Retake the photo or check the catalogue.');
+  if(candidates.length!==1)throw Error('No unique product and strain match. Check the camera-read text below. No stock was changed.');
   labelMatch={...candidates[0],account:customerAccountCode,raw};
   preview.innerHTML='<p><strong>'+escapeHtml(labelMatch.p.name)+' — '+escapeHtml(labelMatch.s.name)+'</strong></p><p>Account: '+escapeHtml(labelMatch.account)+' · Add: +'+qty+' units</p>';
   status.textContent='Review the recognised label and confirm.';
