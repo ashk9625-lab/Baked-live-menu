@@ -1855,8 +1855,11 @@ async function recognizeBoxLabel(file){
   // A word boundary before X incorrectly rejects e.g. CHEESE(I)X20 or CHEESEX20.
   const qtyCandidates=[...raw.matchAll(/[X×✕]\s*[:=.-]?\s*(\d{1,4})(?!\d)|(\d{1,4})\s*[X×✕](?![A-Z])/gi)].map(m=>Number(m[1]||m[2]));
   const uniqueQty=[...new Set(qtyCandidates)];
-  if(uniqueQty.length!==1)throw Error('Quantity not recognised unambiguously. Camera read: '+(raw.trim()||'(blank)')+'. No stock was changed.');
-  const qty=uniqueQty[0];
+  const manualQtyText=String($('#labelQuantityOverride')?.value||'').trim();
+  const manualQty=manualQtyText?Number(manualQtyText):null;
+  if(manualQtyText&&(!Number.isSafeInteger(manualQty)||manualQty<1||manualQty>1000))throw Error('Enter a whole-number box quantity between 1 and 1000.');
+  if(!manualQtyText&&uniqueQty.length!==1)throw Error('Quantity unclear. Enter 20 (or the quantity printed on your box) in Box quantity, then select the same photo again. No stock was changed.');
+  const qty=manualQtyText?manualQty:uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
   const typeTokens=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1|!]\s*\)/g,'(I)').match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
@@ -1895,7 +1898,7 @@ async function confirmBoxLabelStock(){
   if(!Number.isSafeInteger(old)||old<0)throw Error('Cannot verify existing stock.');
   await api('/rest/v1/rpc/admin_set_customer_strain_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:account,p_product_id:p.id,p_strain_name:s.name,p_stock:old+qty})});
   status.textContent='Added '+qty+' to '+account+' — '+p.name+' / '+s.name+'. New stock: '+(old+qty)+'.';
-  labelMatch=null;$('#labelPhoto').value='';$('#labelRecognitionPreview').textContent='';
+  labelMatch=null;$('#labelPhoto').value='';if($('#labelQuantityOverride'))$('#labelQuantityOverride').value='';$('#labelRecognitionPreview').textContent='';
   await loadCustomerStock();
  }catch(err){status.textContent='Stock NOT confirmed: '+err.message;}
  finally{labelBusy=false;btn.disabled=!labelMatch;}
