@@ -173,6 +173,19 @@
         <section id="inventoryTab" class="admin-tab-panel hidden">
           <div class="fast-stock-card" id="cameraLabelPanel">
  <h3>📷 Camera Label Recognition</h3><p class="admin-help">Photograph the box sticker at any size, keeping its text clear and centered. An exact recognised match adds stock automatically. Unclear labels never change stock. Account comes from your Live Menu login.</p>
+ <div class="camera-controls" style="margin:12px 0">
+  <button id="openLabelCamera" class="btn primary" type="button">Open Camera</button>
+  <div id="labelCameraView" class="hidden" style="margin-top:10px">
+   <video id="labelCameraVideo" autoplay playsinline muted style="display:block;width:100%;max-height:350px;object-fit:contain;background:#111;border-radius:10px"></video>
+   <div style="display:flex;gap:8px;margin:10px 0">
+    <button type="button" class="btn ghost label-zoom" data-zoom="1">1×</button>
+    <button type="button" class="btn ghost label-zoom" data-zoom="2">2×</button>
+    <button type="button" class="btn ghost label-zoom" data-zoom="3">3×</button>
+   </div>
+   <button id="captureLabelCamera" type="button" class="btn primary">Scan Sticker</button>
+   <button id="closeLabelCamera" type="button" class="btn ghost">Close Camera</button>
+  </div>
+ </div>
  <input type="file" id="labelPhoto" accept="image/*" capture="environment" style="width:100%;margin:12px 0">
  <p id="labelRecognitionStatus" class="form-message">Take a clear photo of the sticker.</p>
  <div id="labelRecognitionPreview"></div>
