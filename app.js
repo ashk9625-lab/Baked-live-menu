@@ -1202,8 +1202,10 @@ async function removeAdmin(id,email){
 
 
 let customerStockProducts=[];
+function selectedStockAccount(){return $('#customerStockAccount')?.value==='NSFT'?'NSFT':'CUSTOMER';}
+let loadedCustomerStockAccount='',loadedFastStockAccount='';
 async function loadCustomerStock(){
-  const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER',box=$('#customerStockList'),msg=$('#customerStockMessage');
+  const code=selectedStockAccount(),box=$('#customerStockList'),msg=$('#customerStockMessage');
   if(!box)return;
   if(msg)msg.textContent='Loading '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
   try{
@@ -1213,6 +1215,7 @@ async function loadCustomerStock(){
     ]);
     const stockMap=new Map((inv||[]).map(x=>[String(x.product_id),Number(x.stock||0)]));
     customerStockProducts=(ps||[]).map(p=>({...p,customer_stock:stockMap.get(String(p.id))||0}));
+    loadedCustomerStockAccount=code;
     renderCustomerStock();
     if(msg)msg.textContent=(code==='NSFT'?'NSFT':'Customer')+' inventory loaded.';
   }catch(err){box.innerHTML='<div class="empty-state"><p>'+escapeHtml(err.message)+'</p></div>';if(msg)msg.textContent=err.message;}
@@ -1224,7 +1227,8 @@ function renderCustomerStock(){
   box.innerHTML=rows.length?rows.map(p=>`<div class="fast-stock-row"><span><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'')}</small></span><div><small>Current ${p.customer_stock}</small><input class="customer-stock-input" data-product="${p.id}" type="number" min="0" step="1" value="${p.customer_stock}" inputmode="numeric"></div></div>`).join(''):'<div class="empty-state"><p>No products found.</p></div>';
 }
 async function saveCustomerStock(){
-  const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER',inputs=[...document.querySelectorAll('.customer-stock-input')],btn=$('#saveCustomerStockButton'),msg=$('#customerStockMessage');
+  const code=selectedStockAccount(),inputs=[...document.querySelectorAll('.customer-stock-input')],btn=$('#saveCustomerStockButton'),msg=$('#customerStockMessage');
+  if(code!==loadedCustomerStockAccount){toast('Account changed — reload stock before saving');await loadCustomerStock();return;}
   btn.disabled=true;msg.textContent='Saving '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
   let saved=0;
   try{
@@ -1257,7 +1261,7 @@ function renderFastStock(){
 }
 async function loadFastStock(){
   try{
-    const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER';
+    const code=selectedStockAccount();
     const [ps,inv]=await Promise.all([
       api('/rest/v1/products?select=id,sku,name,category,description&order=name.asc',{auth:true}),
       api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:code})})
@@ -1270,12 +1274,14 @@ async function loadFastStock(){
       const text=strains.map(s=>`${s.name} = ${stockMap.get(String(p.id)+'::'+String(s.name).trim().toLowerCase())??0}`).join('\n');
       return {...p,description:composeProductDescription(parts.description,text)};
     });
+    loadedFastStockAccount=code;
     renderFastStock();
     const msg=$('#fastStockMessage');if(msg)msg.textContent=(code==='NSFT'?'NSFT':'Customer')+' strain stock loaded.';
   }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function saveFastStock(){
-  const code=customerAccountCode==='NSFT'?'NSFT':'CUSTOMER';
+  const code=selectedStockAccount();
+  if(code!==loadedFastStockAccount){toast('Account changed — reload strain stock before saving');await loadFastStock();return;}
   const inputs=[...document.querySelectorAll('.fast-stock-input')];
   const changes=[];
   inputs.forEach(input=>{
