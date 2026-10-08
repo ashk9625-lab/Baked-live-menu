@@ -1924,6 +1924,7 @@ async function confirmBoxLabelStock(){
 }
 window.addEventListener('DOMContentLoaded',()=>{
  if($('#labelPhoto'))$('#labelPhoto').onchange=e=>recognizeBoxLabel(e.target.files?.[0]);
+ if($('#labelQuantityOverride'))$('#labelQuantityOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file)recognizeBoxLabel(file);};
  if($('#labelConfirmStock'))$('#labelConfirmStock').onclick=confirmBoxLabelStock;
 });
 
