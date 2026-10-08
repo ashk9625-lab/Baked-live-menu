@@ -1948,6 +1948,68 @@ window.addEventListener('DOMContentLoaded',()=>{
   finally{refresh.disabled=false;refresh.textContent='↻ Refresh Admin';}
  };
 });
+let labelCameraStream=null;
+let labelCameraZoom=1;
+let labelHardwareZoom=false;
+async function setLabelCameraZoom(zoom){
+ labelCameraZoom=zoom;
+ const video=$('#labelCameraVideo');
+ const track=labelCameraStream?.getVideoTracks()[0];
+ labelHardwareZoom=false;
+ if(track){
+  const caps=typeof track.getCapabilities==='function'?track.getCapabilities():{};
+  if(caps.zoom&&typeof track.applyConstraints==='function'){
+   try{
+    const target=Math.min(caps.zoom.max,Math.max(caps.zoom.min,zoom));
+    await track.applyConstraints({advanced:[{zoom:target}]});
+    labelHardwareZoom=true;
+   }catch(e){labelHardwareZoom=false;}
+  }
+ }
+ video.style.transform=labelHardwareZoom?'none':'scale('+zoom+')';
+ video.parentElement.style.overflow='hidden';
+ document.querySelectorAll('.label-zoom').forEach(b=>{b.disabled=Number(b.dataset.zoom)===zoom;});
+}
+function closeLabelCamera(){
+ labelCameraStream?.getTracks().forEach(t=>t.stop());
+ labelCameraStream=null;
+ $('#labelCameraVideo').srcObject=null;
+ $('#labelCameraVideo').style.transform='none';
+ $('#labelCameraView').classList.add('hidden');
+}
+window.addEventListener('DOMContentLoaded',()=>{
+ const open=$('#openLabelCamera'),capture=$('#captureLabelCamera'),close=$('#closeLabelCamera');
+ if(open)open.onclick=async()=>{
+  try{
+   closeLabelCamera();
+   if(!navigator.mediaDevices?.getUserMedia)throw Error('Live camera unavailable on this device. Use the photo option.');
+   labelCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+   const video=$('#labelCameraVideo');video.srcObject=labelCameraStream;
+   $('#labelCameraView').classList.remove('hidden');
+   await video.play();
+   await setLabelCameraZoom(1);
+  }catch(e){closeLabelCamera();$('#labelRecognitionStatus').textContent=e.message||'Camera unavailable. Use photo option.';}
+ };
+ document.querySelectorAll('.label-zoom').forEach(b=>b.onclick=()=>setLabelCameraZoom(Number(b.dataset.zoom)));
+ if(close)close.onclick=closeLabelCamera;
+ if(capture)capture.onclick=async()=>{
+  const video=$('#labelCameraVideo');
+  if(!labelCameraStream||!video.videoWidth)return;
+  capture.disabled=true;
+  try{
+   const canvas=document.createElement('canvas');
+   const zoom=labelHardwareZoom?1:labelCameraZoom;
+   const sw=video.videoWidth/zoom,sh=video.videoHeight/zoom;
+   canvas.width=Math.round(Math.min(sw,1600));canvas.height=Math.round(canvas.width*sh/sw);
+   canvas.getContext('2d').drawImage(video,(video.videoWidth-sw)/2,(video.videoHeight-sh)/2,sw,sh,0,0,canvas.width,canvas.height);
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.9));
+   if(!blob)throw Error('Could not capture photo.');
+   closeLabelCamera();
+   await recognizeBoxLabel(new File([blob],'box-sticker.jpg',{type:'image/jpeg'}));
+  }catch(e){$('#labelRecognitionStatus').textContent=e.message||'Could not scan photo.';}
+  finally{capture.disabled=false;}
+ };
+});
 window.addEventListener('DOMContentLoaded',()=>{
  if($('#labelPhoto'))$('#labelPhoto').onchange=e=>recognizeBoxLabel(e.target.files?.[0]);
  if($('#labelQuantityOverride'))$('#labelQuantityOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file&&$('#labelQuantityOverride').value.trim())recognizeBoxLabel(file);};
