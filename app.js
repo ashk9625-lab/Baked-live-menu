@@ -877,10 +877,6 @@ async function saveProduct(e){
       // Keep the top-level account stock synchronized with the exact live strain total.
       const liveTotal=currentStrains.length?currentStrains.reduce((sum,s)=>sum+Math.max(0,Number(s.qty||0)),0):requestedStock;
       await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:liveTotal})});
-      if(!currentStrains.length){
-        // A strain-managed product with every strain removed must become unavailable.
-        await api('/rest/v1/rpc/admin_set_customer_stock',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode,p_product_id:id,p_stock:0})});
-      }
     }
     closeOverlays(); toast(id?'Product updated':'Product added');
     await Promise.all([loadAdminProducts(),loadCustomerStock(),loadFastStock(),loadProducts()]);
