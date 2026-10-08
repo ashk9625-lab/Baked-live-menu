@@ -165,24 +165,6 @@
         </section>
 
         <section id="inventoryTab" class="admin-tab-panel hidden">
-          <div class="fast-stock-card" id="barcodeScannerCard">
-            <div id="mobileScannerBanner" style="margin-bottom:12px;padding:12px 14px;border-radius:12px;background:rgba(24,170,95,.10)"><strong>📱 Mobile Stock Scanner</strong><br><small>On your phone, use the rear camera for faster barcode scanning. This updates the same live inventory.</small></div>
-            <div class="admin-toolbar"><div><h3>📷 Stock Scanner</h3><p class="admin-help">Use the laptop camera to scan packaged stock. Register a barcode once, then future scans add the saved pack quantity automatically.</p></div><select id="scannerAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button id="startScannerButton" class="btn primary" type="button">Start Camera</button><button id="stopScannerButton" class="btn ghost" type="button">Stop Camera</button><button id="undoScanButton" class="btn ghost" type="button" disabled>Undo Last Scan</button></div>
-            <video id="barcodeVideo" playsinline muted style="display:none;width:min(100%,560px);max-height:340px;background:#111;border-radius:12px;object-fit:cover"></video>
-            <p id="scannerMessage" class="form-message">Camera ready to start.</p>
-            <div id="scannerResult"></div>
-            <div id="registerBarcodePanel" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(127,127,127,.25)">
-              <h4>Register this barcode</h4><p style="font-size:1.1rem;font-weight:700;overflow-wrap:anywhere">Scanned: <span id="scannedBarcodeValue"></span></p>
-              <p class="admin-help">First scan only: choose the product and whether this barcode represents a pack of 10 or 20.</p>
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end">
-                <label style="margin:0">Product<select id="scannerProduct"></select></label>
-                <label style="margin:0">Strain<select id="scannerStrain"></select></label><label style="margin:0">New strain name<input id="scannerNewStrain" placeholder="e.g. Blue Dream"></label><label style="margin:0">Type<select id="scannerStrainType"><option value="">Choose</option><option value="S">Sativa (S)</option><option value="I">Indica (I)</option><option value="H">Hybrid (H)</option></select></label><label style="margin:0">Pack Qty<select id="scannerPackQty"><option value="10">10</option><option value="20">20</option></select></label>
-                <button id="saveBarcodeButton" class="btn primary" type="button">Save &amp; Add Stock</button>
-              </div>
-            </div>
-          </div>
-          <div class="inventory-divider"></div>
           <div class="fast-stock-card" id="cameraLabelPanel">
  <h3>📷 Camera Label Recognition</h3><p class="admin-help">Read the existing 40 × 30 mm box sticker with an Android phone. Review the exact match before adding stock. Account comes from your Live Menu login.</p>
  <input type="file" id="labelPhoto" accept="image/*" capture="environment" style="width:100%;margin:12px 0">
@@ -464,7 +446,7 @@
 </div>
 <footer><strong>Baked Africa Live Menu</strong><span>For verified adult customers only. Availability may change without notice.</span><span>STRICTLY 18+ ONLY. No persons under 18 may use this live menu.</span>
 </footer>
-  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>\n  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));}</script>
 
