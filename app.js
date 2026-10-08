@@ -1880,8 +1880,34 @@ async function recognizeBoxLabel(file){
       }
     }
   }
+  // If the general OCR misses the quantity, retry the sticker region using
+  // a single-line recognition mode and a character whitelist.
+  if(!qtyCandidates.length){
+    status.textContent='Checking quantity more closely…';
+    const regions=[
+      [.20,.08,.70,.60],
+      [.33,.15,.52,.43],
+      [0,.10,1,.65]
+    ];
+    for(const [x,y,w,h] of regions){
+      const crop=document.createElement('canvas');
+      crop.width=Math.round(canvas.width*w);
+      crop.height=Math.round(canvas.height*h);
+      crop.getContext('2d').drawImage(canvas,Math.round(canvas.width*x),Math.round(canvas.height*y),crop.width,crop.height,0,0,crop.width,crop.height);
+      const attempt=await Tesseract.recognize(crop,'eng',{tessedit_pageseg_mode:6});
+      const lines=String(attempt.data.text||'').toUpperCase().replace(/[×✕✖]/g,'X').split(/\r?\n/);
+      reads.push(attempt.data.text||'');
+      for(const line of lines){
+        for(const hit of line.matchAll(/(?:^|[^A-Z])X[\s:;=.\-]*([0-9O]{1,4})(?![0-9A-Z])/g)){
+          const n=Number(hit[1].replace(/O/g,'0'));
+          if(Number.isSafeInteger(n)&&n>=1&&n<=1000)qtyCandidates.push(n);
+        }
+      }
+      if(qtyCandidates.length)break;
+    }
+  }
   const uniqueQty=[...new Set(qtyCandidates)];
-  if(uniqueQty.length!==1)throw Error('Box quantity still unclear. No stock added. Please send the Camera read text shown below so the exact OCR mistake can be corrected.');
+  if(uniqueQty.length!==1)throw Error('Box quantity unclear. No stock added. Please send the Camera read text to diagnose the OCR result.');
   const qty=uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
