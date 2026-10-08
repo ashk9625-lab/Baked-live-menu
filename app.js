@@ -822,14 +822,15 @@ async function deleteProduct(id,name,button,sku=''){
 async function openProductModal(p=null){
   $('#productModalTitle').textContent=p?'Edit product':'Add product';
   const accountCode=customerAccountCode==='CUSTOMER'?'CUSTOMER':'NSFT';
+  const inventoryAccountCode=String(p?.category||'').trim().toLowerCase()==='edibles'?'NSFT':accountCode;
   const stockAccount=$('#productStockAccount');if(stockAccount)stockAccount.value=accountCode;
   $('#productForm').reset(); $('#productActive').checked=true; $('#productFeatured').checked=false; $('#productId').value=p?.id||'';
   let accountStock=Number(p?.stock||0), accountStrains=[];
   if(p){
     try{
       const [inv,strainInv]=await Promise.all([
-        api('/rest/v1/rpc/admin_customer_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})}),
-        api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:accountCode})})
+        api('/rest/v1/rpc/admin_customer_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:inventoryAccountCode})}),
+        api('/rest/v1/rpc/admin_customer_strain_inventory',{method:'POST',auth:true,body:JSON.stringify({p_code:inventoryAccountCode})})
       ]);
       const row=(inv||[]).find(x=>String(x.product_id)===String(p.id));
       if(row)accountStock=Number(row.stock||0);
