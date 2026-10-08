@@ -36,12 +36,12 @@ async function customerAccessLogin(e){
     const rows=await api('/rest/v1/rpc/customer_login',{method:'POST',body:JSON.stringify({p_code:document.getElementById('customerAccessCode').value,p_password:document.getElementById('customerAccessPassword').value})});
     const row=Array.isArray(rows)?rows[0]:rows;if(!row?.session_token)throw new Error('Login failed');
     customerSessionToken=row.session_token;customerAccountName=row.customer_name||'';customerAccountCode=String(row.customer_code||document.getElementById('customerAccessCode').value||'').toUpperCase();
-    cart=[];persistCart();hideCustomerGate();await loadProducts();toast(customerAccountName+' menu loaded');
+    cart=[];persistCart();hideCustomerGate();syncStockAccountLabel();await loadProducts();toast(customerAccountName+' menu loaded');
   }catch(err){msg.textContent='Incorrect account or password.';}
 }
 async function customerAccessLogout(){
   try{if(customerSessionToken)await api('/rest/v1/rpc/customer_logout',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});}catch{}
-  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');showCustomerGate();
+  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');syncStockAccountLabel();showCustomerGate();
 }
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
@@ -1202,9 +1202,12 @@ async function removeAdmin(id,email){
 
 
 let customerStockProducts=[];
-function selectedStockAccount(){return $('#customerStockAccount')?.value==='NSFT'?'NSFT':'CUSTOMER';}
+function selectedStockAccount(){return customerSessionToken&&['NSFT','CUSTOMER'].includes(customerAccountCode)?customerAccountCode:null;}
+function syncStockAccountLabel(){const el=$('#customerStockAccountLabel');if(el)el.textContent=selectedStockAccount()==='NSFT'?'NSFT Stock':selectedStockAccount()==='CUSTOMER'?'Customer Stock':'Log in to view stock';}
 let loadedCustomerStockAccount='',loadedFastStockAccount='';
 async function loadCustomerStock(){
+  if(!selectedStockAccount()){syncStockAccountLabel();return;}
+
   const code=selectedStockAccount(),box=$('#customerStockList'),msg=$('#customerStockMessage');
   if(!box)return;
   if(msg)msg.textContent='Loading '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
@@ -1227,6 +1230,8 @@ function renderCustomerStock(){
   box.innerHTML=rows.length?rows.map(p=>`<div class="fast-stock-row"><span><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.group_name||p.category||'')}</small></span><div><small>Current ${p.customer_stock}</small><input class="customer-stock-input" data-product="${p.id}" type="number" min="0" step="1" value="${p.customer_stock}" inputmode="numeric"></div></div>`).join(''):'<div class="empty-state"><p>No products found.</p></div>';
 }
 async function saveCustomerStock(){
+  if(!selectedStockAccount()){syncStockAccountLabel();return;}
+
   const code=selectedStockAccount(),inputs=[...document.querySelectorAll('.customer-stock-input')],btn=$('#saveCustomerStockButton'),msg=$('#customerStockMessage');
   if(code!==loadedCustomerStockAccount){toast('Account changed — reload stock before saving');await loadCustomerStock();return;}
   btn.disabled=true;msg.textContent='Saving '+(code==='NSFT'?'NSFT':'Customer')+' stock…';
@@ -1260,6 +1265,8 @@ function renderFastStock(){
   box.innerHTML=groups.length?groups.join(''):'<div class="empty-state"><p>No strain stock found.</p></div>';
 }
 async function loadFastStock(){
+  if(!selectedStockAccount()){syncStockAccountLabel();return;}
+
   try{
     const code=selectedStockAccount();
     const [ps,inv]=await Promise.all([
@@ -1280,6 +1287,8 @@ async function loadFastStock(){
   }catch(err){const b=$('#fastStockList');if(b)b.innerHTML=`<div class="empty-state"><p>${escapeHtml(err.message)}</p></div>`;}
 }
 async function saveFastStock(){
+  if(!selectedStockAccount()){syncStockAccountLabel();return;}
+
   const code=selectedStockAccount();
   if(code!==loadedFastStockAccount){toast('Account changed — reload strain stock before saving');await loadFastStock();return;}
   const inputs=[...document.querySelectorAll('.fast-stock-input')];
@@ -1307,7 +1316,7 @@ async function saveFastStock(){
 
 if($('#orderAccountFilter'))$('#orderAccountFilter').onchange=loadOrders;
 if($('#customerLogoutButton'))$('#customerLogoutButton').onclick=customerAccessLogout;
-if($('#customerStockAccount'))$('#customerStockAccount').onchange=()=>{loadCustomerStock();loadFastStock();};
+syncStockAccountLabel();
 if($('#customerStockSearch'))$('#customerStockSearch').oninput=renderCustomerStock;
 if($('#saveCustomerStockButton'))$('#saveCustomerStockButton').onclick=saveCustomerStock;
 
