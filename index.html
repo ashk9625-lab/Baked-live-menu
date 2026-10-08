@@ -183,7 +183,18 @@
             </div>
           </div>
           <div class="inventory-divider"></div>
-          <div class="fast-stock-card customer-stock-admin">
+          <div class="fast-stock-card" id="quickStockPanel">
+  <div class="admin-toolbar"><div><h3>📦 Quick Stock — Boxes</h3><p class="admin-help">Android-friendly. One tap adds one sealed box immediately to the selected account. King = 20, Mini = 10.</p></div></div>
+  <div style="display:grid;gap:10px">
+    <label>Account<select id="quickStockAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></label>
+    <label>Product<select id="quickStockProduct"></select></label>
+    <label>Strain<select id="quickStockStrain"></select></label>
+    <button id="quickStockAdd" type="button" class="btn primary" style="min-height:62px;font-size:1.15rem">+ ADD 1 BOX</button>
+    <p id="quickStockMessage" class="form-message" role="status">Select an account, product and strain.</p>
+  </div>
+</div>
+<div class="inventory-divider"></div>
+<div class="fast-stock-card customer-stock-admin">
             <div class="admin-toolbar"><div><h3>Customer Stock</h3><p class="admin-help">Choose which customer menu you are stocking. Customer and NSFT quantities are completely separate.</p></div><select id="customerStockAccount"><option value="CUSTOMER">Customer</option><option value="NSFT">NSFT</option></select></div>
             <div class="fast-stock-search"><input id="customerStockSearch" type="search" placeholder="Search products…"></div>
             <div id="customerStockList" class="fast-stock-list"></div>
