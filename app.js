@@ -1983,11 +1983,11 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{
    closeLabelCamera();
    if(!navigator.mediaDevices?.getUserMedia)throw Error('Live camera unavailable on this device. Use the photo option.');
-   labelCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+   labelCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
    const video=$('#labelCameraVideo');video.srcObject=labelCameraStream;
    $('#labelCameraView').classList.remove('hidden');
    await video.play();
-   await setLabelCameraZoom(1);
+   await setLabelCameraZoom(2);
   }catch(e){closeLabelCamera();$('#labelRecognitionStatus').textContent=e.message||'Camera unavailable. Use photo option.';}
  };
  document.querySelectorAll('.label-zoom').forEach(b=>b.onclick=()=>setLabelCameraZoom(Number(b.dataset.zoom)));
