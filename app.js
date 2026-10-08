@@ -1842,9 +1842,12 @@ async function recognizeBoxLabel(file){
   const ocr=await Tesseract.recognize(canvas,'eng');
   const raw=String(ocr.data.text||'').toUpperCase().replace(/[×✕]/g,'X');
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
-  const qtyMatches=[...raw.matchAll(/\bX\s*(\d{1,4})\b|\b(\d{1,4})\s*X\b/g)];
-  if(qtyMatches.length!==1)throw Error('Quantity not recognised. See the camera-read text below; no stock was changed.');
-  const qty=Number(qtyMatches[0][1]||qtyMatches[0][2]);
+  // Printed labels often join X20 directly to the strain/type with no space.
+  // A word boundary before X incorrectly rejects e.g. CHEESE(I)X20 or CHEESEX20.
+  const qtyCandidates=[...raw.matchAll(/[X×✕]\s*[:=.-]?\s*(\d{1,4})(?!\d)|(\d{1,4})\s*[X×✕](?![A-Z])/gi)].map(m=>Number(m[1]||m[2]));
+  const uniqueQty=[...new Set(qtyCandidates)];
+  if(uniqueQty.length!==1)throw Error('Quantity not recognised unambiguously. Camera read: '+(raw.trim()||'(blank)')+'. No stock was changed.');
+  const qty=uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
   const typeTokens=raw.replace(/[\[\{]/g,'(').replace(/[\]\}]/g,')').replace(/\(\s*[1|!]\s*\)/g,'(I)').match(/\(\s*[SIH]\s*\)|\b(?:SATIVA|INDICA|HYBRID)\b/gi)||[];
