@@ -1948,6 +1948,20 @@ async function confirmBoxLabelStock(){
  finally{labelBusy=false;btn.disabled=!labelMatch;}
 }
 window.addEventListener('DOMContentLoaded',()=>{
+ const refresh=$('#refreshAdminButton');
+ if(refresh)refresh.onclick=async()=>{
+  if(!accessToken){toast('Sign in to refresh Admin');return;}
+  if(refresh.disabled)return;
+  refresh.disabled=true;refresh.textContent='↻ Refreshing…';
+  try{
+   await Promise.all([loadAdminProducts(),loadOrders(),loadInventory(),loadCustomerStock(),loadFastStock(),loadSiteSettings(true),loadAdminUsers(),loadAdminSuggestions(),loadProducts()]);
+   await updateAdminAlerts();
+   toast('Admin dashboard refreshed');
+  }catch(err){toast('Refresh failed: '+(err.message||'Please retry'));}
+  finally{refresh.disabled=false;refresh.textContent='↻ Refresh Admin';}
+ };
+});
+window.addEventListener('DOMContentLoaded',()=>{
  if($('#labelPhoto'))$('#labelPhoto').onchange=e=>recognizeBoxLabel(e.target.files?.[0]);
  if($('#labelQuantityOverride'))$('#labelQuantityOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file&&$('#labelQuantityOverride').value.trim())recognizeBoxLabel(file);};
  if($('#labelTypeOverride'))$('#labelTypeOverride').onchange=()=>{const file=$('#labelPhoto')?.files?.[0];if(file)recognizeBoxLabel(file);};
