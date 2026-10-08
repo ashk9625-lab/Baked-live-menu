@@ -1857,14 +1857,31 @@ async function recognizeBoxLabel(file){
   }
   ctx.putImageData(pixels,0,0);
   const enhanced=await Tesseract.recognize(canvas,'eng');
-  const raw=[String(ocr.data.text||''),String(enhanced.data.text||'')].join('\\n').toUpperCase().replace(/[×✕]/g,'X');
+  // A third OCR pass targets the lower label area where the printed X20 sits.
+  // Keep passes separate so an OCR mistake in one does not get concatenated into a quantity.
+  const lower=document.createElement('canvas');
+  lower.width=canvas.width;
+  lower.height=Math.round(canvas.height*.52);
+  lower.getContext('2d').drawImage(canvas,0,Math.round(canvas.height*.48),canvas.width,lower.height,0,0,lower.width,lower.height);
+  const lowerRead=await Tesseract.recognize(lower,'eng');
+  const reads=[String(ocr.data.text||''),String(enhanced.data.text||''),String(lowerRead.data.text||'')];
+  const raw=reads.join('\n').toUpperCase().replace(/[×✕]/g,'X');
   preview.innerHTML='<p><small>Camera read:</small></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+escapeHtml(raw||'(no text detected)')+'</pre>';
-  // Printed labels often join X20 directly to the strain/type with no space.
-  // A word boundary before X incorrectly rejects e.g. CHEESE(I)X20 or CHEESEX20.
-  const qtyText=raw.replace(/[×✕]/g,'X').replace(/([X])\s*([0-9O]{1,4})/gi,(_,x,n)=>x+n.replace(/O/g,'0'));
-  const qtyCandidates=[...qtyText.matchAll(/X\s*[:=.-]?\s*([0-9O]{1,4})(?![0-9])|([0-9O]{1,4})\s*X(?![A-Z])/gi)].map(m=>Number((m[1]||m[2]).replace(/O/gi,'0')));
+  // Read X20, X 20, X2O, X:20 and OCR's multiplication glyphs.
+  // Require the X to be outside another word so strain names do not become quantities.
+  const qtyCandidates=[];
+  for(const read of reads){
+    const lines=String(read).toUpperCase().replace(/[×✕✖]/g,'X').split(/\r?\n/);
+    for(const line of lines){
+      const hits=[...line.matchAll(/(?:^|[^A-Z])X[\s:;=.\-]*([0-9O]{1,4})(?![0-9A-Z])|(?:^|[^A-Z0-9])([0-9O]{1,4})\s*X(?![A-Z])/g)];
+      for(const hit of hits){
+        const n=Number((hit[1]||hit[2]).replace(/O/g,'0'));
+        if(Number.isSafeInteger(n)&&n>=1&&n<=1000)qtyCandidates.push(n);
+      }
+    }
+  }
   const uniqueQty=[...new Set(qtyCandidates)];
-  if(uniqueQty.length!==1)throw Error('Could not reliably recognise box quantity. No stock was added. Camera read: '+raw.trim());
+  if(uniqueQty.length!==1)throw Error('Box quantity still unclear. No stock added. Please send the Camera read text shown below so the exact OCR mistake can be corrected.');
   const qty=uniqueQty[0];
   if(qty<=0||qty>1000)throw Error('Quantity unclear. Retake the photo.');
   // OCR may read (I) as (1), brackets as spaces, or place the letter on a new line.
