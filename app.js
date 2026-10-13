@@ -37,7 +37,7 @@ async function customerAccessLogin(e){
     const row=Array.isArray(rows)?rows[0]:rows;if(!row?.session_token)throw new Error('Login failed');
     customerSessionToken=row.session_token;customerAccountName=row.customer_name||'';customerAccountCode=String(row.customer_code||document.getElementById('customerAccessCode').value||'').toUpperCase();
     cart=[];persistCart();hideCustomerGate();syncStockAccountLabel();await loadProducts();toast(customerAccountName+' menu loaded');
-  }catch(err){msg.textContent='Incorrect account or password.';}
+  }catch(err){const detail=String(err?.message||'Login failed');msg.textContent=/invalid customer code or password/i.test(detail)?'Incorrect account or password.':`Login service error: ${detail}. Please retry or refresh the page.`;console.error('Customer login error:',err);}
 }
 async function customerAccessLogout(){
   try{if(customerSessionToken)await api('/rest/v1/rpc/customer_logout',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});}catch{}
