@@ -464,12 +464,8 @@ async function loadProducts(){
   }
   updateStats(); buildFilters(); updateVault(); renderProducts(); renderFeaturedProducts(); updateCart();
 }
-let liveMenuRefreshBusy=false;
-setInterval(async()=>{
-  if(!customerSessionToken||liveMenuRefreshBusy||document.hidden)return;
-  liveMenuRefreshBusy=true;
-  try{await loadProducts();}finally{liveMenuRefreshBusy=false;}
-},300000);
+// Automatic full-menu refresh disabled to avoid repeated Supabase image downloads.
+// Users can still refresh manually with the Refresh button.
 
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
