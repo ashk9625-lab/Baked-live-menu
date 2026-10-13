@@ -1033,11 +1033,39 @@ async function saveOrderEdits(){
   btn.disabled=false;
 }
 
-function printPackingSlip(order=selectedOrderDetail){
+async function printPackingSlip(order=selectedOrderDetail){
   if(!order)return toast('Open an order first');
   const items=order.order_items||[];
   const totalPieces=items.reduce((sum,i)=>sum+Number(i.quantity||0),0);
-  const rows=items.map(i=>{const p=products.find(p=>String(p.id)===String(i.product_id));const strength=String(p?.strength||'').trim();const isPreRoll=/pre[- ]?roll/i.test(String(p?.category||''));let label=String(i.product_name||'');if(isPreRoll){label=label.replace(/\s*[—-]\s*\d+(?:\.\d+)?\s*mg\b/ig,'').replace(/\s+\d+(?:\.\d+)?\s*mg\b/ig,'').trim();}else if(/flower/i.test(String(p?.category||''))){label=label.replace(/\s*[—-]\s*\d+(?:\.\d+)?\s*g\b\s*$/i,'').trim();}else if(strength&&!label.toLowerCase().includes(strength.toLowerCase())){label=`${label} — ${strength}`;}return `<tr><td>${escapeHtml(label)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`;}).join('');
+  // Load only product names/categories/strengths, not images. The customer-facing
+  // menu may not contain every product in an older NSFT packing sheet.
+  const productById=new Map((products||[]).map(p=>[String(p.id),p]));
+  const ids=[...new Set(items.map(i=>String(i.product_id||'')).filter(Boolean))];
+  if(ids.length){
+    try{
+      const meta=await api('/rest/v1/products?select=id,name,category,strength&id=in.('+ids.map(encodeURIComponent).join(',')+')',{auth:true});
+      (meta||[]).forEach(p=>productById.set(String(p.id),p));
+    }catch(err){console.warn('Packing sheet strength lookup failed; using available product data',err);}
+  }
+  const rows=items.map(i=>{
+    const p=productById.get(String(i.product_id));
+    const strength=String(p?.strength||'').trim();
+    const category=String(p?.category||'');
+    const isPreRoll=/pre[- ]?roll/i.test(category);
+    const isFlower=/flower/i.test(category);
+    const isEdible=/edibles?/i.test(category);
+    let label=String(i.product_name||p?.name||'');
+    if(isPreRoll){
+      label=label.replace(/\\s*[—-]\\s*\\d+(?:\\.\\d+)?\\s*mg\\b/ig,'').replace(/\\s+\\d+(?:\\.\\d+)?\\s*mg\\b/ig,'').trim();
+    }else if(isFlower){
+      label=label.replace(/\\s*[—-]\\s*\\d+(?:\\.\\d+)?\\s*g\\b\\s*$/i,'').trim();
+    }else if(isEdible && strength && !label.toLowerCase().includes(strength.toLowerCase())){
+      label=`${label} — ${strength}`;
+    }else if(strength && !label.toLowerCase().includes(strength.toLowerCase())){
+      label=`${label} — ${strength}`;
+    }
+    return `<tr><td>${escapeHtml(label)}</td><td>${Number(i.quantity||0)}</td><td class="packing-box"></td></tr>`;
+  }).join('');
   const w=window.open('','_blank','width=900,height=800');
   if(!w)return toast('Allow pop-ups to print the packing slip');
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Packing Slip ${escapeHtml(order.order_number)}</title>
