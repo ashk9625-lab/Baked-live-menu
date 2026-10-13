@@ -469,7 +469,7 @@ setInterval(async()=>{
   if(!customerSessionToken||liveMenuRefreshBusy||document.hidden)return;
   liveMenuRefreshBusy=true;
   try{await loadProducts();}finally{liveMenuRefreshBusy=false;}
-},60000);
+},300000);
 
 function addToCart(id,requestedQuantity=1){
   const p=products.find(x=>String(x.id)===String(id)); if(!p||p.stock<=0)return;
