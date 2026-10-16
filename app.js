@@ -29,7 +29,7 @@ function showCustomerGate(){
   }
   gate.classList.remove('hidden');document.body.classList.add('customer-locked');
 }
-function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');document.getElementById('customerLogoutButton')?.classList.remove('hidden');ensureChangePasswordButton();}
+function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');document.getElementById('customerLogoutButton')?.classList.remove('hidden');}
 function ensureChangePasswordButton(){
   let button=document.getElementById('customerChangePasswordButton');
   if(!button){
