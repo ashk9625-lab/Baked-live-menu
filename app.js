@@ -1140,6 +1140,23 @@ async function adjustOrderInventoryForCancellation(order, direction=1){
     const product=productRows?.[0];
     if(!product)throw new Error(`Product no longer exists: ${item.product_name||productId}`);
 
+    // Edibles use NSFT as the shared stock source for BOTH account menus.
+    // Never restore Edibles via the global products.stock adjustment.
+    if(String(product.category||'').trim().toLowerCase()==='edibles'){
+      const inventory=await api('/rest/v1/rpc/admin_customer_inventory',{
+        method:'POST',auth:true,body:JSON.stringify({p_code:'NSFT'})
+      });
+      const record=(inventory||[]).find(row=>String(row.product_id)===String(productId));
+      if(!record)throw new Error('Shared Edibles inventory record missing');
+      const current=Math.max(0,Number(record.stock||0));
+      if(direction<0&&current<qty)throw new Error('Not enough shared Edibles stock to reopen order');
+      await api('/rest/v1/rpc/admin_set_customer_stock',{
+        method:'POST',auth:true,
+        body:JSON.stringify({p_code:'NSFT',p_product_id:productId,p_stock:current+direction*qty})
+      });
+      continue;
+    }
+
     const strains=parseStrainList(product.description);
     const displayedName=String(item.product_name||'');
     const strainName=displayedName.includes(' — ')?displayedName.split(' — ').slice(1).join(' — ').trim():'';
