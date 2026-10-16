@@ -29,7 +29,47 @@ function showCustomerGate(){
   }
   gate.classList.remove('hidden');document.body.classList.add('customer-locked');
 }
-function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');document.getElementById('customerLogoutButton')?.classList.remove('hidden');}
+function hideCustomerGate(){document.getElementById('customerAccessGate')?.classList.add('hidden');document.body.classList.remove('customer-locked');document.getElementById('customerLogoutButton')?.classList.remove('hidden');ensureChangePasswordButton();}
+function ensureChangePasswordButton(){
+  let button=document.getElementById('customerChangePasswordButton');
+  if(!button){
+    button=document.createElement('button');button.id='customerChangePasswordButton';
+    button.type='button';button.className='btn ghost compact';button.textContent='Change Password';
+    button.onclick=showCustomerChangePassword;
+    document.getElementById('customerLogoutButton')?.before(button);
+  }
+  button.classList.remove('hidden');
+}
+function showCustomerChangePassword(){
+  if(!customerSessionToken)return toast('Please sign in first');
+  let overlay=document.getElementById('customerPasswordOverlay');
+  if(!overlay){
+    overlay=document.createElement('div');overlay.id='customerPasswordOverlay';
+    overlay.className='customer-access-gate';
+    overlay.style.zIndex='10000';
+    overlay.innerHTML='<div class="customer-access-card"><h2>Change Password</h2><p>Change the password for your signed-in account only.</p><form id="customerPasswordForm" class="form-stack"><label>Current password<input id="customerCurrentPassword" type="password" autocomplete="current-password" required></label><label>New password<input id="customerNewPassword" type="password" autocomplete="new-password" minlength="12" required></label><label>Confirm new password<input id="customerConfirmPassword" type="password" autocomplete="new-password" minlength="12" required></label><button class="btn primary wide" type="submit">Save New Password</button><button class="btn ghost wide" id="customerCancelPassword" type="button">Cancel</button><p id="customerPasswordMessage" class="form-message" role="status"></p></form></div>';
+    document.body.appendChild(overlay);
+    document.getElementById('customerCancelPassword').onclick=()=>overlay.classList.add('hidden');
+    document.getElementById('customerPasswordForm').onsubmit=async e=>{
+      e.preventDefault();
+      const current=document.getElementById('customerCurrentPassword').value;
+      const next=document.getElementById('customerNewPassword').value;
+      const confirm=document.getElementById('customerConfirmPassword').value;
+      const msg=document.getElementById('customerPasswordMessage');
+      if(next!==confirm){msg.textContent='New passwords do not match.';return;}
+      if(next.length<12){msg.textContent='Use at least 12 characters.';return;}
+      const save=e.target.querySelector('[type="submit"]');save.disabled=true;msg.textContent='Saving…';
+      try{
+        await api('/rest/v1/rpc/customer_change_password',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken,p_current_password:current,p_new_password:next})});
+        e.target.reset();overlay.classList.add('hidden');toast('Password changed successfully');
+      }catch(err){msg.textContent=String(err.message||'Password change failed');}
+      finally{save.disabled=false;}
+    };
+  }
+  document.getElementById('customerPasswordForm').reset();
+  document.getElementById('customerPasswordMessage').textContent='';
+  overlay.classList.remove('hidden');
+}
 async function customerAccessLogin(e){
   e.preventDefault();const msg=document.getElementById('customerAccessMessage');msg.textContent='Signing in…';
   try{
@@ -41,7 +81,7 @@ async function customerAccessLogin(e){
 }
 async function customerAccessLogout(){
   try{if(customerSessionToken)await api('/rest/v1/rpc/customer_logout',{method:'POST',body:JSON.stringify({p_session_token:customerSessionToken})});}catch{}
-  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');syncStockAccountLabel();showCustomerGate();
+  customerSessionToken='';customerAccountName='';customerAccountCode='';localStorage.removeItem('baked-customer-session');localStorage.removeItem('baked-customer-name');cart=[];persistCart();document.getElementById('customerLogoutButton')?.classList.add('hidden');document.getElementById('customerChangePasswordButton')?.classList.add('hidden');document.getElementById('customerPasswordOverlay')?.classList.add('hidden');syncStockAccountLabel();showCustomerGate();
 }
 
 let products = [], cart = JSON.parse(localStorage.getItem('baked-cart') || '[]'), accessToken = localStorage.getItem('baked-access-token') || '';
